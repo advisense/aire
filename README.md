@@ -32,7 +32,7 @@ docs/architecture.md    Why the harness is shaped this way
 ## Getting started
 
 ```bash
-git clone <this repo> && cd crypto-re-harness
+git clone <this repo> && cd aire
 claude
 ```
 

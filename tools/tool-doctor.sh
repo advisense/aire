@@ -20,7 +20,7 @@ first_available() {
     fi
   done
 
-  printf '%-12s %-9s %-18s %s\n' "$capability" missing "-" "$requirement"
+  printf '%-12s %-9s %-18s %s: %s\n' "$capability" missing "-" "$requirement" "$*"
   return 1
 }
 
