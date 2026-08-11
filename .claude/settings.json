@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(./cases/**/.env)",
+      "Read(**/.ssh/**)",
+      "Read(**/.aws/**)",
+      "Bash(git push:*)"
+    ],
+    "ask": [
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(nc:*)",
+      "Bash(ncat:*)",
+      "Bash(openssl s_client:*)",
+      "Bash(nmap:*)",
+      "Bash(tshark -i:*)",
+      "Bash(dumpcap:*)",
+      "Bash(frida:*)",
+      "Bash(frida-trace:*)",
+      "Bash(lldb:*)",
+      "Bash(gdb:*)",
+      "Bash(docker:*)",
+      "Bash(mitmproxy:*)",
+      "Bash(mitmdump:*)",
+      "WebFetch"
+    ],
+    "allow": [
+      "Bash(file:*)",
+      "Bash(strings:*)",
+      "Bash(xxd:*)",
+      "Bash(hexdump:*)",
+      "Bash(readelf:*)",
+      "Bash(objdump:*)",
+      "Bash(nm:*)",
+      "Bash(ldd:*)",
+      "Bash(sha256sum:*)",
+      "Bash(shasum -a 256:*)",
+      "Bash(md5sum:*)",
+      "Bash(otool:*)",
+      "Bash(codesign -d:*)",
+      "Bash(dwarfdump:*)",
+      "Bash(openssl dgst:*)",
+      "Bash(openssl x509:*)",
+      "Bash(openssl asn1parse:*)",
+      "Bash(openssl pkey:*)",
+      "Bash(openssl rsa:*)",
+      "Bash(openssl ec:*)",
+      "Bash(openssl cms:*)",
+      "Bash(openssl pkcs7:*)",
+      "Bash(openssl pkcs12:*)",
+      "Bash(binwalk:*)",
+      "Bash(entropy:*)",
+      "Bash(yara:*)",
+      "Bash(tshark -r:*)",
+      "Bash(capinfos:*)",
+      "Bash(editcap:*)",
+      "Bash(mergecap:*)",
+      "Bash(rabin2:*)",
+      "Bash(r2 -qc:*)",
+      "Bash(rizin -qc:*)",
+      "Bash(python3:*)",
+      "Bash(jq:*)",
+      "Bash(./tools/tool-doctor.sh:*)"
+    ]
+  },
+  "env": {
+    "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "2"
+  }
+}

@@ -1,0 +1,16 @@
+# Case artifacts: samples, captures, extracted keys, client data. Never commit.
+cases/*
+!cases/TEMPLATE/
+!cases/.gitkeep
+
+# Personal permission overrides
+.claude/settings.local.json
+
+# Agent scratch memory that shouldn't be shared
+.claude/agent-memory-local/
+
+# Tooling
+__pycache__/
+*.pyc
+.venv/
+node_modules/
