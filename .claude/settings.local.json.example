@@ -1,0 +1,9 @@
+{
+  "_comment": "Copy to settings.local.json for personal overrides. Gitignored.",
+  "_comment2": "Only widen these on a machine where the blast radius is acceptable.",
+  "permissions": {
+    "allow": [
+      "Bash(tshark:*)"
+    ]
+  }
+}
