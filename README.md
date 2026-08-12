@@ -24,6 +24,7 @@ CLAUDE.md               House rules: authorization, case workflow, delegation po
     tool-selection/     Portable selection of installed local tools
     new-case/           /new-case — scaffolds a case directory
   agents/               Delegated context — read-heavy triage workers
+      findings-reviewer.md  Independent challenge of case findings and confidence ratings
 cases/                  One directory per target. Gitignored except TEMPLATE/
 tools/                  Local MCP servers for stateful sessions (see tools/README.md)
 docs/architecture.md    Why the harness is shaped this way
