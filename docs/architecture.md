@@ -107,9 +107,6 @@ shared file.
 - **No tool abstraction layer.** Skills document invocations directly. An abstraction
   over `tshark` and `rizin` would need updating every time either changes, in exchange
   for hiding syntax that is already documented upstream.
-- **No exploitation tooling.** The deliverable of this harness is understanding and
-  written findings. That boundary is stated in `CLAUDE.md` and reflected in the agent
-  prompts.
 - **Mobile is out of scope** for now. Adding it means a `mobile-re` skill and a
   session-oriented MCP server for on-device instrumentation; the structure already
   accommodates it.
