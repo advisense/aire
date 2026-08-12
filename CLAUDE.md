@@ -13,13 +13,6 @@ live target — fetching a URL, connecting to a host, sending a request — read
 is not listed in it, stop and ask. Static analysis of local artifacts (a binary on disk,
 a captured pcap) does not need this gate; anything that generates traffic does.
 
-**Analysis, not exploitation.** The purpose of this harness is to understand systems:
-identify primitives, recover protocol structure, assess whether cryptography is used
-correctly, and document findings. Producing working exploits, malware, or weaponized
-attack tooling is out of scope for this project regardless of how a task is framed.
-When analysis surfaces a weakness, the deliverable is a written finding with evidence
-and remediation guidance — not a working attack.
-
 **Run untrusted code in the sandbox.** Never execute a sample on the host. See
 `docs/architecture.md` for the isolation model.
 
@@ -47,16 +40,24 @@ stripped binary, full packet lists. That output should not land in the main cont
 sweeping a corpus, identifying primitives in a large binary, summarizing a pcap.
 The subagent burns its own context on the noise and returns a summary.
 
+Before writing any individual finding to `FINDINGS.md`, delegate the draft and its
+cited evidence to `findings-reviewer`. Reconcile the verdict by hand, then write only
+the accepted or revised finding and preserve the returned `REVIEW.md` content. The
+reviewer is deliberately read-only so it contests findings instead of fixing them.
+
 **Keep on the main thread** anything holding live state — an attached debugger, a
 running instrumentation session, a live browser, an interactive proxy. Subagents cannot
 share live state with the main session, and trying to delegate that work will fail
 in confusing ways.
 
-Subagents write to the case directory and return a path plus a short summary, rather
-than returning bulk findings inline. See `.claude/agents/` for the roster.
+Subagents normally write to the case directory and return a path plus a short summary,
+rather than returning bulk findings inline. The findings reviewer is the read-only
+exception. See `.claude/agents/` for the roster.
 
 ## Working style
 
+- Be terse. Keep updates and final responses brief, reporting only decisions, essential
+  evidence, blockers, and next actions. Do not narrate routine tool use.
 - State hypotheses explicitly and say what evidence would falsify them. "Probably AES"
   is not a finding; "AES-128 in CBC mode, evidenced by the T-table constants at
   0x4A2C10 and the 16-byte IV prefix on each record" is.

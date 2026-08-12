@@ -31,8 +31,10 @@ Check what applies:
 
 - [ ] Static analysis of provided artifacts
 - [ ] Passive traffic capture on our own connections
-- [ ] Interactive analysis of the live application (read-only)
+- [ ] Interactive analysis of the live application (limited to read-only)
+- [ ] Interactive analysis of the live application (unrestricted)
 - [ ] Active testing that sends crafted input to the target
+- [ ] Verification of vulnerabilities (PoCs)
 - [ ] Testing against production
 - [ ] Testing outside agreed hours
 

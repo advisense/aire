@@ -51,6 +51,10 @@ Secondary benefits: **specialization** — a narrow agent with a constants table
 preloaded behaves better than a generalist — and **parallel exploration** across
 several artifacts or competing hypotheses.
 
+Independent review also depends on context isolation. A findings reviewer starts from
+the case evidence without inheriting the analyst's conversation, so it can re-derive
+claims instead of absorbing the framing that produced them.
+
 **The constraint that shapes the roster:** subagents cannot share live state. None of
 them can reach into the main session's attached debugger or running instrumentation.
 So the division is:
