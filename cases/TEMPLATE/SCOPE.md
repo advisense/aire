@@ -19,6 +19,9 @@ the work is not authorized.
 
 Systems, hosts, domains, and artifacts that may be analyzed. Live hosts must be listed
 explicitly — a domain being related to the client is not the same as being in scope.
+Write each live HTTP(S) boundary as an exact backtick-quoted URL, including its port
+and any path restriction (for example, `https://app.example.test:8443/api`). Active
+cases use these URLs to auto-approve simple in-scope `curl` commands.
 
 ## Out of scope
 
@@ -31,10 +34,9 @@ Check what applies:
 
 - [ ] Static analysis of provided artifacts
 - [ ] Passive traffic capture on our own connections
-- [ ] Interactive analysis of the live application (no state changes)
-- [ ] Interactive analysis of the live application (state changes permitted)
+- [ ] Interactive analysis of the live application
 - [ ] Active testing that sends crafted input to the target
-- [ ] Verification of vulnerabilities (minimal PoCs only; no weaponized exploits)
+- [ ] Creation and execution of PoCs that shows impact or confirms existence
 - [ ] Testing against production
 - [ ] Testing outside agreed hours
 

@@ -61,10 +61,26 @@
       "Bash(rizin -qc:*)",
       "Bash(python3:*)",
       "Bash(jq:*)",
-      "Bash(./tools/tool-doctor.sh:*)"
+      "Bash(./tools/tool-doctor.sh:*)",
+      "Bash(./tools/corpus-lookup:*)"
     ]
   },
   "env": {
     "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "2"
+  },
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(curl *)",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/approve-in-scope-curl.py",
+            "args": []
+          }
+        ]
+      }
+    ]
   }
 }

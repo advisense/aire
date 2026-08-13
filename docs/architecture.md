@@ -77,6 +77,19 @@ state lives on disk rather than in the conversation.
 It also makes handoffs between main thread and subagents clean: both read and write
 the same directory instead of passing large blobs through the delegation boundary.
 
+## Corpora are queried, not loaded
+
+Large weakness catalogs live under `.claude/corpora/` as versioned JSONL snapshots.
+The forked `corpus-lookup` skill owns the complete lookup and audit workflow in an
+isolated context, while the stateless `tools/corpus-lookup` helper performs capped
+search, detail retrieval, pagination, and ledger updates. Only the compact result
+returns to the main conversation.
+
+An exhaustive review is defined by a case's generated `CORPUS-COVERAGE.json`: it pins
+corpus versions and selected categories, then assigns every selected entry an
+evidence-backed disposition. This makes completeness reproducible without pretending
+the catalog covers weaknesses published after its snapshot date.
+
 ## Isolation
 
 Untrusted binaries and live targets do not belong on the analyst's host. The intended
@@ -99,6 +112,13 @@ risk that a permission policy is trying to avoid.
 
 Personal widening belongs in `.claude/settings.local.json` (gitignored), never in the
 shared file.
+
+The `PermissionRequest` hook in `.claude/settings.json` auto-approves conservative,
+direct `curl` invocations only when every requested URL falls under an exact
+backtick-quoted HTTP(S) URL in the **In scope** section of an `ACTIVE` case. The hook
+requires the same scheme, host, and effective port, and honors path restrictions.
+Commands using redirects, proxies, curl config files, shell composition or expansion,
+or unrecognized options keep the normal permission prompt.
 
 ## Deliberate omissions
 

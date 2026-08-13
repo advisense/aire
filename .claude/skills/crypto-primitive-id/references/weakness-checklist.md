@@ -5,6 +5,10 @@ failures, not broken primitives. Each item below is written as what to look for 
 why it matters, so the finding can be recorded with impact per the `case-workflow`
 format.
 
+This is the fast first-pass checklist, not an exhaustive catalog. For auditable
+coverage, use the `corpus-lookup` skill to select versioned corpora and maintain the
+case's `CORPUS-COVERAGE.json` ledger without loading the corpus wholesale.
+
 ## Key material
 
 - **Hardcoded keys in the binary or client bundle.** A key shipped to the user is not

@@ -1,10 +1,18 @@
 # Local MCP servers
 
-`tool-doctor.sh` is the one deliberately stateless helper in this directory. It
-reports which documented CLI capabilities are available without installing anything:
+This directory has two deliberately stateless helpers. `tool-doctor.sh` reports which
+documented CLI capabilities are available without installing anything:
 
 ```bash
 ./tools/tool-doctor.sh
+```
+
+`corpus-lookup` performs bounded, paginated queries over registered weakness corpora
+and maintains version-pinned case coverage ledgers:
+
+```bash
+./tools/corpus-lookup corpora
+./tools/corpus-lookup search "GCM nonce reuse" --limit 10
 ```
 
 Everything else in this directory should follow the stateful-server rule below.

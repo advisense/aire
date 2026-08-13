@@ -13,6 +13,7 @@ delegation roster, and working conventions on top of it.
 CLAUDE.md               House rules: authorization, case workflow, delegation policy
 .claude/
   settings.json         Permission rules (deny-first), shared with the team
+  corpora/              Versioned, machine-queryable weakness corpora and registry
   skills/               Methodology — how to do the work
     case-workflow/      Case directory contract and finding format
     crypto-primitive-id/  Identifying primitives from constants and behaviour
@@ -22,11 +23,12 @@ CLAUDE.md               House rules: authorization, case workflow, delegation po
     artifact-intake/    Safe sample import, hashing, and provenance
     tls-certificate-analysis/  X.509, key container, and handshake inspection
     tool-selection/     Portable selection of installed local tools
+    corpus-lookup/      Isolated corpus queries and exhaustive case coverage workflow
     new-case/           /new-case — scaffolds a case directory
   agents/               Delegated context — read-heavy triage workers
       findings-reviewer.md  Independent challenge of case findings and confidence ratings
 cases/                  One directory per target. Gitignored except TEMPLATE/
-tools/                  Local MCP servers for stateful sessions (see tools/README.md)
+tools/                  Stateless helpers and local MCP servers (see tools/README.md)
 docs/architecture.md    Why the harness is shaped this way
 ```
 
@@ -49,6 +51,12 @@ Check which local analysis capabilities are available:
 
 ```bash
 ./tools/tool-doctor.sh
+```
+
+List the installed weakness corpora without loading their contents into context:
+
+```bash
+./tools/corpus-lookup corpora
 ```
 
 The starter configuration works with the stock macOS command-line tools and uses

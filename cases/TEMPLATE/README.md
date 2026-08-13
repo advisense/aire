@@ -10,3 +10,7 @@ reports/      Rendered deliverables.
 ```
 
 Fill in `SCOPE.md` before touching any live target.
+
+When performing a corpus-backed weakness review, the `corpus-lookup` skill generates
+`CORPUS-COVERAGE.json` in the case directory. It is intentionally absent from a new
+case until corpus selections have been made.

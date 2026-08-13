@@ -1,7 +1,7 @@
 ---
 name: new-case
 description: Scaffold a new case directory for a reverse engineering target. Run with /new-case <case-name>.
-argument-hint: [case-name]
+argument-hint: "case-name"
 disable-model-invocation: true
 allowed-tools: Bash, Read, Write, Edit
 ---

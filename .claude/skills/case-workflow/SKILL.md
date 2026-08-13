@@ -16,12 +16,18 @@ between the main thread and subagents.
 cases/<case-name>/
   SCOPE.md          Authorization boundary. Read before touching anything live.
   FINDINGS.md       Confirmed conclusions with evidence. The deliverable.
+  DRAFT-FINDINGS.md Findings awaiting findings-reviewer. Promote or discard after review.
   NOTES.md          Working log: hypotheses, dead ends, what to try next.
+  CORPUS-COVERAGE.json  Generated, version-pinned weakness review ledger (when used).
   artifacts/        Original samples, immutable. Hash on intake, never edit.
   extracted/        Anything derived: unpacked binaries, decoded blobs, keys, certs.
   scripts/          Case-specific tooling — parsers, decryptors, harnesses.
   reports/          Rendered output for the client or the file.
 ```
+
+Create `CORPUS-COVERAGE.json` only through the `corpus-lookup` skill. It records which
+registered corpus snapshots were reviewed and the evidence-backed disposition of each
+entry; do not hand-edit it or treat it as a substitute for `FINDINGS.md`.
 
 ## Intake
 
@@ -42,6 +48,11 @@ Never modify anything in `artifacts/`. Unpacking, patching, and decoding produce
 files in `extracted/`, so the chain from original to derived stays reconstructable.
 
 ## Recording findings
+
+Draft findings go into `DRAFT-FINDINGS.md` first. Delegate the draft to
+`findings-reviewer`, reconcile the verdict, then move the accepted finding to
+`FINDINGS.md` and delete it from the draft file. Never write directly to
+`FINDINGS.md` — the review gate is mandatory.
 
 `FINDINGS.md` holds only conclusions you would defend in a report. Use this structure:
 
