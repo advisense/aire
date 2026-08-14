@@ -64,5 +64,7 @@ of building a small harness in `cases/<case>/scripts/` to get there.
 
 Identification is rarely the deliverable on its own. Once you know what is in use,
 walk `references/weakness-checklist.md` — the recurring failures are in how primitives
-are composed, not in the primitives themselves. Every weakness you record goes into
-`FINDINGS.md` with evidence, impact, and remediation, per the `case-workflow` skill.
+are composed, not in the primitives themselves. Record every candidate weakness with
+evidence, impact, and remediation in `DRAFT-FINDINGS.md`, then follow the
+`case-workflow` skill: send it to `findings-reviewer`, reconcile the verdict, and move
+only accepted findings to `FINDINGS.md`.

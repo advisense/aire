@@ -62,6 +62,22 @@ ARG_LONG = {
 
 NO_ARG_SHORT = set("sSivkfgNO46I")
 ARG_SHORT = set("XHdo mubcFTAm".replace(" ", ""))
+UNSAFE_LONG = {
+    "--cookie-jar",
+    "--data",
+    "--data-ascii",
+    "--data-binary",
+    "--data-raw",
+    "--data-urlencode",
+    "--form",
+    "--form-string",
+    "--header",
+    "--json",
+    "--output",
+    "--remote-name",
+    "--upload-file",
+}
+UNSAFE_SHORT = set("cdFHoT")
 
 
 def project_dir() -> Path:
@@ -85,6 +101,11 @@ def active_scope_urls(root: Path) -> list[SplitResult]:
             continue
         text = scope_path.read_text(encoding="utf-8", errors="replace")
         if not re.search(r"(?im)^\*\*Status:\*\*\s*ACTIVE\s*$", text):
+            continue
+        if not re.search(
+            r"(?im)^\s*-\s*\[[xX]\]\s+Interactive analysis of the live application\s*$",
+            text,
+        ):
             continue
         authorization = section(text, "Authorization")
         if not authorization or "if this section is empty" in authorization.lower():
@@ -134,6 +155,8 @@ def curl_urls(command: str) -> list[str] | None:
         if word.startswith("--"):
             name, separator, attached = word.partition("=")
             if name in NO_ARG_LONG and not separator:
+                if name in UNSAFE_LONG:
+                    return None
                 index += 1
                 continue
             if name not in ARG_LONG:
@@ -145,6 +168,10 @@ def curl_urls(command: str) -> list[str] | None:
                 if index >= len(words):
                     return None
                 value = words[index]
+            if name in UNSAFE_LONG:
+                return None
+            if name == "--request" and value.upper() not in {"GET", "HEAD"}:
+                return None
             if name == "--url":
                 urls.append(value)
             index += 1
@@ -155,6 +182,8 @@ def curl_urls(command: str) -> list[str] | None:
             while offset < len(chars):
                 option = chars[offset]
                 if option in NO_ARG_SHORT:
+                    if option in UNSAFE_SHORT or option == "O":
+                        return None
                     offset += 1
                     continue
                 if option not in ARG_SHORT:
@@ -166,6 +195,10 @@ def curl_urls(command: str) -> list[str] | None:
                     if index >= len(words):
                         return None
                     value = words[index]
+                if option in UNSAFE_SHORT:
+                    return None
+                if option == "X" and value.upper() not in {"GET", "HEAD"}:
+                    return None
                 offset = len(chars)
                 # Curl's short options do not include a safe URL-bearing equivalent
                 # of --url, so the consumed value is deliberately ignored here.

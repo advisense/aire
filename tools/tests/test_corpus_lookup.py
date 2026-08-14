@@ -38,7 +38,8 @@ class CorpusLookupTests(unittest.TestCase):
             entry("AEAD-001", "GCM nonce reuse", "aead", "A nonce repeats under one GCM key."),
             entry("KEY-001", "Hardcoded key", "key-management", "A secret key is shipped with the client."),
         ]
-        (corpus_dir / "entries.jsonl").write_text(
+        self.entries_path = corpus_dir / "entries.jsonl"
+        self.entries_path.write_text(
             "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"
         )
         self.registry = {
@@ -167,10 +168,58 @@ class CorpusLookupTests(unittest.TestCase):
         drift = self.run_tool("ledger", "verify", str(self.case), expected=2)
         self.assertIn("version drift", drift.stderr)
 
+    def test_verify_rejects_changed_corpus_content_without_version_bump(self) -> None:
+        self.run_tool("ledger", "init", str(self.case), "--select", "crypto-core")
+        for entry_id in ("crypto-core:AEAD-001", "crypto-core:KEY-001"):
+            self.run_tool(
+                "ledger",
+                "set",
+                str(self.case),
+                entry_id,
+                "--status",
+                "not-applicable",
+                "--evidence",
+                "Primitive absent from target.",
+            )
+
+        added = entry("ZZZ-999", "New weakness", "aead", "Added to the same version.")
+        with self.entries_path.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(added) + "\n")
+
+        result = self.run_tool("ledger", "verify", str(self.case), expected=2)
+        self.assertIn("content drift", result.stderr)
+        self.assertIn("selected entries missing from ledger", result.stderr)
+        blocked_set = self.run_tool(
+            "ledger",
+            "set",
+            str(self.case),
+            "crypto-core:AEAD-001",
+            "--status",
+            "ruled-out",
+            "--evidence",
+            "Checked again.",
+            expected=2,
+        )
+        self.assertIn("changed corpora", blocked_set.stderr)
+
+    def test_verify_rejects_missing_and_empty_checks(self) -> None:
+        self.run_tool(
+            "ledger", "init", str(self.case), "--select", "crypto-core:aead"
+        )
+        ledger_path = self.case / "CORPUS-COVERAGE.json"
+        ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+        ledger["checks"] = {}
+        ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
+
+        result = self.run_tool("ledger", "verify", str(self.case), expected=2)
+        self.assertIn("ledger has no checks", result.stderr)
+        self.assertIn("crypto-core:AEAD-001", result.stderr)
+
     def test_validate_rejects_unsorted_entries(self) -> None:
-        path = self.root / "crypto-core" / "entries.jsonl"
-        lines = path.read_text(encoding="utf-8").splitlines()
-        path.write_text("\n".join(reversed(lines)) + "\n", encoding="utf-8")
+        lines = self.entries_path.read_text(encoding="utf-8").splitlines()
+        self.entries_path.write_text(
+            "\n".join(reversed(lines)) + "\n", encoding="utf-8"
+        )
         result = self.run_tool("validate", expected=2)
         self.assertIn("entries must be sorted by id", result.stderr)
 

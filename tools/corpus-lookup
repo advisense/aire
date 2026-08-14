@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -87,11 +88,8 @@ def registry(root: Path) -> dict[str, dict[str, Any]]:
 
 
 def entries_for(root: Path, record: dict[str, Any]) -> list[dict[str, Any]]:
-    path = (root / record["path"]).resolve()
-    try:
-        path.relative_to(root.resolve())
-    except ValueError as exc:
-        raise CorpusError(f"corpus path escapes root: {record['path']}") from exc
+    path = corpus_path(root, record)
+
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except FileNotFoundError as exc:
@@ -117,6 +115,22 @@ def entries_for(root: Path, record: dict[str, Any]) -> list[dict[str, Any]]:
     if [item["id"] for item in entries] != sorted(item["id"] for item in entries):
         raise CorpusError(f"{path}: entries must be sorted by id")
     return entries
+
+
+def corpus_path(root: Path, record: dict[str, Any]) -> Path:
+    path = (root / record["path"]).resolve()
+    try:
+        path.relative_to(root.resolve())
+    except ValueError as exc:
+        raise CorpusError(f"corpus path escapes root: {record['path']}") from exc
+    if not path.is_file():
+        raise CorpusError(f"missing corpus entries: {path}")
+    return path
+
+
+def corpus_digest(root: Path, record: dict[str, Any]) -> str:
+    content = corpus_path(root, record).read_bytes()
+    return hashlib.sha256(content).hexdigest()
 
 
 def validate_entry(corpus: str, entry: Any, path: Path, line_number: int) -> None:
@@ -388,6 +402,10 @@ def cmd_ledger_init(args: argparse.Namespace, root: Path, records: dict[str, dic
     if not entries:
         raise CorpusError("selection produced no entries")
     versions = {selection["corpus"]: records[str(selection["corpus"])]["version"] for selection in selections}
+    digests = {
+        name: corpus_digest(root, records[name])
+        for name in versions
+    }
     checks = {
         entry["full_id"]: {
             "title": entry["title"],
@@ -401,6 +419,7 @@ def cmd_ledger_init(args: argparse.Namespace, root: Path, records: dict[str, dic
         "schema_version": 1,
         "created_at": utc_now(),
         "corpus_versions": versions,
+        "corpus_digests": digests,
         "selections": selections,
         "checks": checks,
     }
@@ -410,7 +429,7 @@ def cmd_ledger_init(args: argparse.Namespace, root: Path, records: dict[str, dic
 
 def cmd_ledger_next(args: argparse.Namespace, root: Path, records: dict[str, dict[str, Any]]) -> None:
     _, ledger = load_ledger(args.case)
-    drift = version_drift(ledger, records)
+    drift = snapshot_drift(root, ledger, records)
     if drift:
         raise CorpusError(
             "cannot continue a ledger against changed corpora: " + "; ".join(drift)
@@ -435,6 +454,11 @@ def cmd_ledger_next(args: argparse.Namespace, root: Path, records: dict[str, dic
 
 def cmd_ledger_set(args: argparse.Namespace, root: Path, records: dict[str, dict[str, Any]]) -> None:
     path, ledger = load_ledger(args.case)
+    drift = snapshot_drift(root, ledger, records)
+    if drift:
+        raise CorpusError(
+            "cannot continue a ledger against changed corpora: " + "; ".join(drift)
+        )
     if args.id not in ledger["checks"]:
         raise CorpusError(f"entry is not in this ledger: {args.id}")
     if args.status in TERMINAL_STATUSES and not args.evidence.strip():
@@ -469,30 +493,98 @@ def version_drift(ledger: dict[str, Any], records: dict[str, dict[str, Any]]) ->
     return drift
 
 
+def content_drift(
+    root: Path, ledger: dict[str, Any], records: dict[str, dict[str, Any]]
+) -> list[str]:
+    pinned_digests = ledger.get("corpus_digests")
+    if not isinstance(pinned_digests, dict):
+        return ["ledger has no pinned corpus digests"]
+    drift = []
+    for name in sorted(ledger.get("corpus_versions", {})):
+        pinned = pinned_digests.get(name)
+        record = records.get(name)
+        if not isinstance(pinned, str) or not re.fullmatch(r"[0-9a-f]{64}", pinned):
+            drift.append(f"{name}: missing or invalid pinned digest")
+        elif record is not None:
+            current = corpus_digest(root, record)
+            if current != pinned:
+                drift.append(f"{name}: corpus content changed")
+    return drift
+
+
+def snapshot_drift(
+    root: Path, ledger: dict[str, Any], records: dict[str, dict[str, Any]]
+) -> list[str]:
+    return version_drift(ledger, records) + content_drift(root, ledger, records)
+
+
+def expected_ledger_ids(
+    root: Path, ledger: dict[str, Any], records: dict[str, dict[str, Any]]
+) -> set[str]:
+    selections = ledger.get("selections")
+    if not isinstance(selections, list) or not selections:
+        raise CorpusError("ledger selections must be a nonempty array")
+    expressions = []
+    for selection in selections:
+        if not isinstance(selection, dict):
+            raise CorpusError("each ledger selection must be an object")
+        corpus = selection.get("corpus")
+        categories = selection.get("categories")
+        if not isinstance(corpus, str) or not isinstance(categories, list):
+            raise CorpusError("invalid ledger selection")
+        if any(not isinstance(category, str) for category in categories):
+            raise CorpusError("invalid ledger selection categories")
+        suffix = f":{'+'.join(categories)}" if categories else ""
+        expressions.append(f"{corpus}{suffix}")
+    _, entries, _ = parse_selections(root, records, expressions)
+    return {entry["full_id"] for entry in entries}
+
+
 def cmd_ledger_status(args: argparse.Namespace, root: Path, records: dict[str, dict[str, Any]]) -> None:
     path, ledger = load_ledger(args.case)
     counts = status_counts(ledger)
-    drift = version_drift(ledger, records)
-    output = {"ledger": str(path), "total": len(ledger["checks"]), "counts": counts, "version_drift": drift}
+    versions = version_drift(ledger, records)
+    contents = content_drift(root, ledger, records)
+    output = {
+        "ledger": str(path),
+        "total": len(ledger["checks"]),
+        "counts": counts,
+        "version_drift": versions,
+        "content_drift": contents,
+    }
     if args.json:
         print(json.dumps(output, indent=2))
     else:
         print(f"{path} | {output['total']} checks")
         print(" | ".join(f"{key}={value}" for key, value in counts.items()))
-        for item in drift:
+        for item in versions:
             print(f"version-drift: {item}")
+        for item in contents:
+            print(f"content-drift: {item}")
 
 
 def cmd_ledger_verify(args: argparse.Namespace, root: Path, records: dict[str, dict[str, Any]]) -> None:
     _, ledger = load_ledger(args.case)
     counts = status_counts(ledger)
-    drift = version_drift(ledger, records)
+    versions = version_drift(ledger, records)
+    contents = content_drift(root, ledger, records)
     problems = []
+    expected_ids = expected_ledger_ids(root, ledger, records)
+    actual_ids = set(ledger["checks"])
+    missing = sorted(expected_ids - actual_ids)
+    unexpected = sorted(actual_ids - expected_ids)
+    if not actual_ids:
+        problems.append("ledger has no checks")
+    if missing:
+        problems.append(f"{len(missing)} selected entries missing from ledger: {', '.join(missing)}")
+    if unexpected:
+        problems.append(f"{len(unexpected)} unexpected ledger entries: {', '.join(unexpected)}")
     if counts["unchecked"]:
         problems.append(f"{counts['unchecked']} unchecked")
     if counts["unknown"]:
         problems.append(f"{counts['unknown']} unknown")
-    problems.extend(f"version drift: {item}" for item in drift)
+    problems.extend(f"version drift: {item}" for item in versions)
+    problems.extend(f"content drift: {item}" for item in contents)
     if problems:
         raise CorpusError("coverage incomplete: " + "; ".join(problems))
     print(f"OK: complete coverage of {len(ledger['checks'])} ledger entries")

@@ -86,9 +86,10 @@ search, detail retrieval, pagination, and ledger updates. Only the compact resul
 returns to the main conversation.
 
 An exhaustive review is defined by a case's generated `CORPUS-COVERAGE.json`: it pins
-corpus versions and selected categories, then assigns every selected entry an
-evidence-backed disposition. This makes completeness reproducible without pretending
-the catalog covers weaknesses published after its snapshot date.
+corpus versions, content digests, and selected categories, then assigns every selected
+entry an evidence-backed disposition. Verification recomputes the selected entry set,
+so completeness remains reproducible without pretending the catalog covers weaknesses
+published after its snapshot date.
 
 ## Isolation
 

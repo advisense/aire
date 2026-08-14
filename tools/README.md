@@ -8,7 +8,7 @@ documented CLI capabilities are available without installing anything:
 ```
 
 `corpus-lookup` performs bounded, paginated queries over registered weakness corpora
-and maintains version-pinned case coverage ledgers:
+and maintains version- and content-pinned case coverage ledgers:
 
 ```bash
 ./tools/corpus-lookup corpora
