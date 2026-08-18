@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "corpora": [
+    {
+      "name": "crypto-core",
+      "version": "2026.08.1",
+      "description": "General cryptographic primitives, key management, randomness, derivation, asymmetric cryptography, signatures, and KEMs",
+      "path": "crypto-core/entries.jsonl",
+      "updated": "2026-08-12",
+      "sources": [
+        {
+          "title": "NIST cryptographic standards and guidelines",
+          "url": "https://csrc.nist.gov/publications"
+        },
+        {
+          "title": "RFC Editor",
+          "url": "https://www.rfc-editor.org/"
+        }
+      ]
+    },
+    {
+      "name": "crypto-implementation",
+      "version": "2026.08.2",
+      "description": "Cryptographic API misuse, side channels, oracles, fault resistance, secret handling, state safety, and custom constructions",
+      "path": "crypto-implementation/entries.jsonl",
+      "updated": "2026-08-12",
+      "sources": [
+        {
+          "title": "MITRE Common Weakness Enumeration",
+          "url": "https://cwe.mitre.org/"
+        },
+        {
+          "title": "NIST FIPS 140-3",
+          "url": "https://csrc.nist.gov/pubs/fips/140-3/final"
+        }
+      ]
+    },
+    {
+      "name": "tls-pki",
+      "version": "2026.08.1",
+      "description": "TLS, DTLS, X.509 path validation, service identity, session resumption, and transport-security deployment weaknesses",
+      "path": "tls-pki/entries.jsonl",
+      "updated": "2026-08-12",
+      "sources": [
+        {
+          "title": "RFC 9325: Recommendations for Secure Use of TLS and DTLS",
+          "url": "https://www.rfc-editor.org/rfc/rfc9325.html"
+        },
+        {
+          "title": "RFC 5280: Internet X.509 PKI Certificate and CRL Profile",
+          "url": "https://www.rfc-editor.org/rfc/rfc5280.html"
+        }
+      ]
+    }
+  ]
+}

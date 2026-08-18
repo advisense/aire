@@ -31,8 +31,10 @@ identification table: read it when scanning for constants.
 
 Automate the scan where possible — `yara` with FindCrypt-style rules, `rizin`'s
 `/ca` search, or `binwalk -Y`. A hit tells you the primitive is *present*; it does
-not tell you it is *used*. Always follow cross-references from the table to a caller
-before recording it as a finding.
+not tell you it is *used*. Record the presence as an observation (`./tools/evidence
+add`, with the offset and the `reproduce` command), and keep "the primitive is used" as
+a `HYPOTHESES.md` entry until you have followed cross-references from the table to a
+caller.
 
 ## 3. Structural fingerprints
 
@@ -64,5 +66,8 @@ of building a small harness in `cases/<case>/scripts/` to get there.
 
 Identification is rarely the deliverable on its own. Once you know what is in use,
 walk `references/weakness-checklist.md` — the recurring failures are in how primitives
-are composed, not in the primitives themselves. Every weakness you record goes into
-`FINDINGS.md` with evidence, impact, and remediation, per the `case-workflow` skill.
+are composed, not in the primitives themselves. Capture each supporting fact as an
+observation in `EVIDENCE.jsonl` (`./tools/evidence add`), then draft the candidate
+weakness in `DRAFT-FINDINGS.md` citing those `O-NNN` IDs and follow the `case-workflow`
+skill: send it to `findings-reviewer`, reconcile the verdict, and move only accepted
+findings to `FINDINGS.md`.

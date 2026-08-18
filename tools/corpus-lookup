@@ -1,0 +1,681 @@
+#!/usr/bin/env python3
+"""Query registered weakness corpora and maintain bounded case audit ledgers."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Iterable
+
+
+MAX_LIMIT = 50
+LEDGER_NAME = "CORPUS-COVERAGE.json"
+TERMINAL_STATUSES = {"confirmed", "probable", "ruled-out", "not-applicable", "unknown"}
+ALL_STATUSES = TERMINAL_STATUSES | {"unchecked"}
+REQUIRED_ENTRY_FIELDS = {
+    "id": str,
+    "title": str,
+    "summary": str,
+    "categories": list,
+    "applicable_when": list,
+    "check": list,
+    "indicators": list,
+    "impact": str,
+    "remediation": str,
+    "references": list,
+}
+
+
+class CorpusError(Exception):
+    pass
+
+
+def default_root() -> Path:
+    override = os.environ.get("AIRE_CORPORA_ROOT")
+    if override:
+        return Path(override).resolve()
+    return Path(__file__).resolve().parents[1] / ".claude" / "corpora"
+
+
+def read_json(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise CorpusError(f"missing file: {path}") from exc
+    except json.JSONDecodeError as exc:
+        raise CorpusError(f"invalid JSON in {path}: {exc}") from exc
+
+
+def write_json(path: Path, value: Any) -> None:
+    temporary = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+    try:
+        temporary.write_text(
+            json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def registry(root: Path) -> dict[str, dict[str, Any]]:
+    data = read_json(root / "registry.json")
+    if not isinstance(data, dict) or data.get("schema_version") != 1:
+        raise CorpusError("registry schema_version must be 1")
+    records = data.get("corpora")
+    if not isinstance(records, list):
+        raise CorpusError("registry corpora must be an array")
+    result: dict[str, dict[str, Any]] = {}
+    for record in records:
+        if not isinstance(record, dict):
+            raise CorpusError("each registry corpus must be an object")
+        name = record.get("name")
+        if not isinstance(name, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", name):
+            raise CorpusError(f"invalid corpus name: {name!r}")
+        if name in result:
+            raise CorpusError(f"duplicate corpus name: {name}")
+        for field in ("version", "description", "path", "updated"):
+            if not isinstance(record.get(field), str) or not record[field]:
+                raise CorpusError(f"{name}: missing string field {field}")
+        result[name] = record
+    return result
+
+
+def entries_for(root: Path, record: dict[str, Any]) -> list[dict[str, Any]]:
+    path = corpus_path(root, record)
+
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError as exc:
+        raise CorpusError(f"missing corpus entries: {path}") from exc
+    entries: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for line_number, line in enumerate(lines, 1):
+        if not line.strip():
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise CorpusError(f"{path}:{line_number}: invalid JSON: {exc}") from exc
+        validate_entry(record["name"], entry, path, line_number)
+        if entry["id"] in seen:
+            raise CorpusError(f"{path}:{line_number}: duplicate id {entry['id']}")
+        seen.add(entry["id"])
+        item = dict(entry)
+        item["corpus"] = record["name"]
+        item["corpus_version"] = record["version"]
+        item["full_id"] = f"{record['name']}:{entry['id']}"
+        entries.append(item)
+    if [item["id"] for item in entries] != sorted(item["id"] for item in entries):
+        raise CorpusError(f"{path}: entries must be sorted by id")
+    return entries
+
+
+def corpus_path(root: Path, record: dict[str, Any]) -> Path:
+    path = (root / record["path"]).resolve()
+    try:
+        path.relative_to(root.resolve())
+    except ValueError as exc:
+        raise CorpusError(f"corpus path escapes root: {record['path']}") from exc
+    if not path.is_file():
+        raise CorpusError(f"missing corpus entries: {path}")
+    return path
+
+
+def corpus_digest(root: Path, record: dict[str, Any]) -> str:
+    content = corpus_path(root, record).read_bytes()
+    return hashlib.sha256(content).hexdigest()
+
+
+def validate_entry(corpus: str, entry: Any, path: Path, line_number: int) -> None:
+    prefix = f"{path}:{line_number}"
+    if not isinstance(entry, dict):
+        raise CorpusError(f"{prefix}: entry must be an object")
+    for field, expected in REQUIRED_ENTRY_FIELDS.items():
+        if not isinstance(entry.get(field), expected) or entry[field] in ("", []):
+            raise CorpusError(f"{prefix}: invalid or empty {field}")
+    if not re.fullmatch(r"[A-Z0-9][A-Z0-9-]*", entry["id"]):
+        raise CorpusError(f"{prefix}: invalid id {entry['id']!r}")
+    for field in ("categories", "applicable_when", "check", "indicators"):
+        if not all(isinstance(value, str) and value for value in entry[field]):
+            raise CorpusError(f"{prefix}: {field} must contain nonempty strings")
+    if not all(re.fullmatch(r"[a-z0-9][a-z0-9-]*", value) for value in entry["categories"]):
+        raise CorpusError(f"{prefix}: invalid category in {corpus}:{entry['id']}")
+    for reference in entry["references"]:
+        if not isinstance(reference, dict) or not isinstance(reference.get("title"), str):
+            raise CorpusError(f"{prefix}: invalid reference")
+        if not isinstance(reference.get("url"), str) or not reference["url"].startswith("https://"):
+            raise CorpusError(f"{prefix}: reference URL must use https")
+
+
+def selected_entries(
+    root: Path,
+    records: dict[str, dict[str, Any]],
+    corpus_names: list[str] | None = None,
+    categories: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    names = corpus_names or sorted(records)
+    unknown = sorted(set(names) - set(records))
+    if unknown:
+        raise CorpusError(f"unknown corpus: {', '.join(unknown)}")
+    items = [entry for name in names for entry in entries_for(root, records[name])]
+    if categories:
+        wanted = set(categories)
+        items = [entry for entry in items if wanted.intersection(entry["categories"])]
+    return sorted(items, key=lambda item: item["full_id"])
+
+
+def bounded_limit(value: str) -> int:
+    number = int(value)
+    if number < 1 or number > MAX_LIMIT:
+        raise argparse.ArgumentTypeError(f"limit must be between 1 and {MAX_LIMIT}")
+    return number
+
+
+def page(items: list[dict[str, Any]], after: str | None, limit: int) -> tuple[list[dict[str, Any]], str | None]:
+    if after:
+        items = [item for item in items if item["full_id"] > after]
+    batch = items[:limit]
+    cursor = batch[-1]["full_id"] if len(items) > limit and batch else None
+    return batch, cursor
+
+
+def compact(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": item["full_id"],
+        "title": item["title"],
+        "summary": item["summary"],
+        "categories": item["categories"],
+    }
+
+
+def print_compact(items: Iterable[dict[str, Any]], cursor: str | None = None) -> None:
+    count = 0
+    for item in items:
+        count += 1
+        print(f"{item['full_id']} | {item['title']} | {item['summary']}")
+    if count == 0:
+        print("No entries.")
+    if cursor:
+        print(f"next: --after {cursor}")
+
+
+def full_text(item: dict[str, Any]) -> str:
+    parts: list[str] = []
+    for value in item.values():
+        if isinstance(value, str):
+            parts.append(value)
+        elif isinstance(value, list):
+            for child in value:
+                parts.append(json.dumps(child, sort_keys=True) if isinstance(child, dict) else str(child))
+    return " ".join(parts).casefold()
+
+
+def render_entry(item: dict[str, Any]) -> None:
+    print(f"# {item['full_id']} — {item['title']}\n")
+    print(item["summary"])
+    for heading, field in (
+        ("Applicable when", "applicable_when"),
+        ("Checks", "check"),
+        ("Indicators", "indicators"),
+    ):
+        print(f"\n## {heading}\n")
+        for value in item[field]:
+            print(f"- {value}")
+    print(f"\n## Impact\n\n{item['impact']}")
+    print(f"\n## Remediation\n\n{item['remediation']}")
+    if item.get("false_positives"):
+        print("\n## False positives\n")
+        for value in item["false_positives"]:
+            print(f"- {value}")
+    print("\n## References\n")
+    for reference in item["references"]:
+        locator = f" — {reference['locator']}" if reference.get("locator") else ""
+        print(f"- [{reference['title']}]({reference['url']}){locator}")
+
+
+def ledger_path(case: str) -> Path:
+    case_path = Path(case).resolve()
+    if not (case_path / "SCOPE.md").is_file():
+        raise CorpusError(f"not a case directory (missing SCOPE.md): {case_path}")
+    return case_path / LEDGER_NAME
+
+
+def load_ledger(case: str) -> tuple[Path, dict[str, Any]]:
+    path = ledger_path(case)
+    data = read_json(path)
+    if not isinstance(data, dict) or data.get("schema_version") != 1:
+        raise CorpusError(f"invalid ledger schema: {path}")
+    if not isinstance(data.get("checks"), dict):
+        raise CorpusError(f"invalid ledger checks: {path}")
+    return path, data
+
+
+def parse_selections(
+    root: Path, records: dict[str, dict[str, Any]], selections: list[str]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[tuple[str, int]]]:
+    normalized: list[dict[str, Any]] = []
+    collected: dict[str, dict[str, Any]] = {}
+    counts: list[tuple[str, int]] = []
+    for selection in selections:
+        corpus, separator, category_expression = selection.partition(":")
+        if corpus not in records:
+            raise CorpusError(f"unknown corpus in selection: {corpus}")
+        if separator and not category_expression:
+            raise CorpusError(f"empty category in selection: {selection}")
+        categories = category_expression.split("+") if category_expression else []
+        if any(not re.fullmatch(r"[a-z0-9][a-z0-9-]*", value) for value in categories):
+            raise CorpusError(f"invalid category expression: {selection}")
+        entries = entries_for(root, records[corpus])
+        if categories:
+            entries = [
+                entry
+                for entry in entries
+                if set(categories).issubset(entry["categories"])
+            ]
+            if not entries:
+                raise CorpusError(f"selection has no entries: {selection}")
+        normalized.append({"corpus": corpus, "categories": categories})
+        counts.append((selection, len(entries)))
+        for entry in entries:
+            collected[entry["full_id"]] = entry
+    return normalized, [collected[key] for key in sorted(collected)], counts
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def cmd_corpora(args: argparse.Namespace, root: Path, records: dict[str, dict[str, Any]]) -> None:
+    output = []
+    for name in sorted(records):
+        record = records[name]
+        count = len(entries_for(root, record))
+        output.append({"name": name, "version": record["version"], "entries": count, "description": record["description"]})
+    if args.json:
+        print(json.dumps(output, indent=2))
+    elif output:
+        for item in output:
+            print(f"{item['name']}@{item['version']} | {item['entries']} entries | {item['description']}")
+    else:
+        print("No corpora registered.")
+
+
+def cmd_categories(args: argparse.Namespace, root: Path, records: dict[str, dict[str, Any]]) -> None:
+    items = selected_entries(root, records, [args.corpus])
+    counts: dict[str, int] = {}
+    for item in items:
+        for category in item["categories"]:
+            counts[category] = counts.get(category, 0) + 1
+    if args.json:
+        print(json.dumps(counts, indent=2, sort_keys=True))
+    else:
+        for name in sorted(counts):
+            print(f"{name} | {counts[name]}")
+
+
+def cmd_list(args: argparse.Namespace, root: Path, records: dict[str, dict[str, Any]]) -> None:
+    items = selected_entries(root, records, args.corpus, args.category)
+    batch, cursor = page(items, args.after, args.limit)
+    if args.json:
+        print(json.dumps({"entries": [compact(item) for item in batch], "next": cursor}, indent=2))
+    else:
+        print_compact(batch, cursor)
+
+
+def cmd_search(args: argparse.Namespace, root: Path, records: dict[str, dict[str, Any]]) -> None:
+    terms = [term.casefold() for term in re.findall(r"[\w-]+", args.query) if term]
+    if not terms:
+        raise CorpusError("search query has no searchable terms")
+    items = selected_entries(root, records, args.corpus, args.category)
+    ranked: list[tuple[int, str, dict[str, Any]]] = []
+    for item in items:
+        haystack = full_text(item)
+        score = sum(haystack.count(term) for term in terms)
+        if score:
+            if args.query.casefold() in haystack:
+                score += 5
+            ranked.append((-score, item["full_id"], item))
+    batch = [item for _, _, item in sorted(ranked)[: args.limit]]
+    if args.json:
+        print(json.dumps([compact(item) for item in batch], indent=2))
+    else:
+        print_compact(batch)
+
+
+def cmd_show(args: argparse.Namespace, root: Path, records: dict[str, dict[str, Any]]) -> None:
+    if ":" not in args.id:
+        raise CorpusError("use a namespaced id such as crypto-core:AEAD-001")
+    corpus = args.id.split(":", 1)[0]
+    items = selected_entries(root, records, [corpus])
+    match = next((item for item in items if item["full_id"] == args.id), None)
+    if match is None:
+        raise CorpusError(f"unknown entry: {args.id}")
+    if args.json:
+        print(json.dumps(match, indent=2, sort_keys=True))
+    else:
+        render_entry(match)
+
+
+def cmd_validate(args: argparse.Namespace, root: Path, records: dict[str, dict[str, Any]]) -> None:
+    total = 0
+    for record in records.values():
+        total += len(entries_for(root, record))
+    print(f"OK: {len(records)} corpora, {total} entries")
+
+
+def cmd_preview(args: argparse.Namespace, root: Path, records: dict[str, dict[str, Any]]) -> None:
+    _, entries, counts = parse_selections(root, records, args.select)
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "selections": [
+                        {"selection": selection, "entries": count}
+                        for selection, count in counts
+                    ],
+                    "deduplicated_entries": len(entries),
+                    "sample": [compact(entry) for entry in entries[: args.limit]],
+                },
+                indent=2,
+            )
+        )
+        return
+    for selection, count in counts:
+        print(f"{selection} | {count} entries")
+    print(f"deduplicated | {len(entries)} entries")
+    print("sample:")
+    print_compact(entries[: args.limit])
+
+
+def cmd_ledger_init(args: argparse.Namespace, root: Path, records: dict[str, dict[str, Any]]) -> None:
+    path = ledger_path(args.case)
+    if path.exists():
+        raise CorpusError(f"ledger already exists: {path}")
+    selections, entries, _ = parse_selections(root, records, args.select)
+    if not entries:
+        raise CorpusError("selection produced no entries")
+    versions = {selection["corpus"]: records[str(selection["corpus"])]["version"] for selection in selections}
+    digests = {
+        name: corpus_digest(root, records[name])
+        for name in versions
+    }
+    checks = {
+        entry["full_id"]: {
+            "title": entry["title"],
+            "status": "unchecked",
+            "evidence": "",
+            "checked_at": None,
+        }
+        for entry in entries
+    }
+    ledger = {
+        "schema_version": 1,
+        "created_at": utc_now(),
+        "corpus_versions": versions,
+        "corpus_digests": digests,
+        "selections": selections,
+        "checks": checks,
+    }
+    write_json(path, ledger)
+    print(f"Created {path} with {len(checks)} checks.")
+
+
+def cmd_ledger_next(args: argparse.Namespace, root: Path, records: dict[str, dict[str, Any]]) -> None:
+    _, ledger = load_ledger(args.case)
+    drift = snapshot_drift(root, ledger, records)
+    if drift:
+        raise CorpusError(
+            "cannot continue a ledger against changed corpora: " + "; ".join(drift)
+        )
+    pending_ids = [key for key, value in sorted(ledger["checks"].items()) if value.get("status") == "unchecked"]
+    items_by_id = {item["full_id"]: item for item in selected_entries(root, records)}
+    batch = []
+    for entry_id in pending_ids[: args.limit]:
+        item = items_by_id.get(entry_id)
+        if item is None:
+            raise CorpusError(f"ledger entry missing from current corpora: {entry_id}")
+        batch.append(item)
+    if args.json:
+        print(json.dumps(batch, indent=2, sort_keys=True))
+    elif batch:
+        for item in batch:
+            render_entry(item)
+            print("\n---\n")
+    else:
+        print("No unchecked entries.")
+
+
+def cmd_ledger_set(args: argparse.Namespace, root: Path, records: dict[str, dict[str, Any]]) -> None:
+    path, ledger = load_ledger(args.case)
+    drift = snapshot_drift(root, ledger, records)
+    if drift:
+        raise CorpusError(
+            "cannot continue a ledger against changed corpora: " + "; ".join(drift)
+        )
+    if args.id not in ledger["checks"]:
+        raise CorpusError(f"entry is not in this ledger: {args.id}")
+    if args.status in TERMINAL_STATUSES and not args.evidence.strip():
+        raise CorpusError("terminal statuses require --evidence")
+    ledger["checks"][args.id].update(
+        {
+            "status": args.status,
+            "evidence": args.evidence.strip(),
+            "checked_at": utc_now() if args.status != "unchecked" else None,
+        }
+    )
+    write_json(path, ledger)
+    print(f"{args.id}: {args.status}")
+
+
+def status_counts(ledger: dict[str, Any]) -> dict[str, int]:
+    counts = {status: 0 for status in sorted(ALL_STATUSES)}
+    for check in ledger["checks"].values():
+        status = check.get("status")
+        if status not in ALL_STATUSES:
+            raise CorpusError(f"invalid ledger status: {status!r}")
+        counts[status] += 1
+    return counts
+
+
+def version_drift(ledger: dict[str, Any], records: dict[str, dict[str, Any]]) -> list[str]:
+    drift = []
+    for name, pinned in sorted(ledger.get("corpus_versions", {}).items()):
+        current = records.get(name, {}).get("version")
+        if current != pinned:
+            drift.append(f"{name}: ledger={pinned}, current={current or 'missing'}")
+    return drift
+
+
+def content_drift(
+    root: Path, ledger: dict[str, Any], records: dict[str, dict[str, Any]]
+) -> list[str]:
+    pinned_digests = ledger.get("corpus_digests")
+    if not isinstance(pinned_digests, dict):
+        return ["ledger has no pinned corpus digests"]
+    drift = []
+    for name in sorted(ledger.get("corpus_versions", {})):
+        pinned = pinned_digests.get(name)
+        record = records.get(name)
+        if not isinstance(pinned, str) or not re.fullmatch(r"[0-9a-f]{64}", pinned):
+            drift.append(f"{name}: missing or invalid pinned digest")
+        elif record is not None:
+            current = corpus_digest(root, record)
+            if current != pinned:
+                drift.append(f"{name}: corpus content changed")
+    return drift
+
+
+def snapshot_drift(
+    root: Path, ledger: dict[str, Any], records: dict[str, dict[str, Any]]
+) -> list[str]:
+    return version_drift(ledger, records) + content_drift(root, ledger, records)
+
+
+def expected_ledger_ids(
+    root: Path, ledger: dict[str, Any], records: dict[str, dict[str, Any]]
+) -> set[str]:
+    selections = ledger.get("selections")
+    if not isinstance(selections, list) or not selections:
+        raise CorpusError("ledger selections must be a nonempty array")
+    expressions = []
+    for selection in selections:
+        if not isinstance(selection, dict):
+            raise CorpusError("each ledger selection must be an object")
+        corpus = selection.get("corpus")
+        categories = selection.get("categories")
+        if not isinstance(corpus, str) or not isinstance(categories, list):
+            raise CorpusError("invalid ledger selection")
+        if any(not isinstance(category, str) for category in categories):
+            raise CorpusError("invalid ledger selection categories")
+        suffix = f":{'+'.join(categories)}" if categories else ""
+        expressions.append(f"{corpus}{suffix}")
+    _, entries, _ = parse_selections(root, records, expressions)
+    return {entry["full_id"] for entry in entries}
+
+
+def cmd_ledger_status(args: argparse.Namespace, root: Path, records: dict[str, dict[str, Any]]) -> None:
+    path, ledger = load_ledger(args.case)
+    counts = status_counts(ledger)
+    versions = version_drift(ledger, records)
+    contents = content_drift(root, ledger, records)
+    output = {
+        "ledger": str(path),
+        "total": len(ledger["checks"]),
+        "counts": counts,
+        "version_drift": versions,
+        "content_drift": contents,
+    }
+    if args.json:
+        print(json.dumps(output, indent=2))
+    else:
+        print(f"{path} | {output['total']} checks")
+        print(" | ".join(f"{key}={value}" for key, value in counts.items()))
+        for item in versions:
+            print(f"version-drift: {item}")
+        for item in contents:
+            print(f"content-drift: {item}")
+
+
+def cmd_ledger_verify(args: argparse.Namespace, root: Path, records: dict[str, dict[str, Any]]) -> None:
+    _, ledger = load_ledger(args.case)
+    counts = status_counts(ledger)
+    versions = version_drift(ledger, records)
+    contents = content_drift(root, ledger, records)
+    problems = []
+    expected_ids = expected_ledger_ids(root, ledger, records)
+    actual_ids = set(ledger["checks"])
+    missing = sorted(expected_ids - actual_ids)
+    unexpected = sorted(actual_ids - expected_ids)
+    if not actual_ids:
+        problems.append("ledger has no checks")
+    if missing:
+        problems.append(f"{len(missing)} selected entries missing from ledger: {', '.join(missing)}")
+    if unexpected:
+        problems.append(f"{len(unexpected)} unexpected ledger entries: {', '.join(unexpected)}")
+    if counts["unchecked"]:
+        problems.append(f"{counts['unchecked']} unchecked")
+    if counts["unknown"]:
+        problems.append(f"{counts['unknown']} unknown")
+    problems.extend(f"version drift: {item}" for item in versions)
+    problems.extend(f"content drift: {item}" for item in contents)
+    if problems:
+        raise CorpusError("coverage incomplete: " + "; ".join(problems))
+    print(f"OK: complete coverage of {len(ledger['checks'])} ledger entries")
+
+
+def parser() -> argparse.ArgumentParser:
+    top = argparse.ArgumentParser(description=__doc__)
+    top.add_argument("--root", type=Path, default=default_root(), help=argparse.SUPPRESS)
+    sub = top.add_subparsers(dest="command", required=True)
+
+    corpora = sub.add_parser("corpora", help="list registered corpora")
+    corpora.add_argument("--json", action="store_true")
+    corpora.set_defaults(handler=cmd_corpora)
+
+    categories = sub.add_parser("categories", help="list categories in a corpus")
+    categories.add_argument("--corpus", required=True)
+    categories.add_argument("--json", action="store_true")
+    categories.set_defaults(handler=cmd_categories)
+
+    for name, help_text, handler in (
+        ("list", "list entries with stable pagination", cmd_list),
+        ("search", "search entry text", cmd_search),
+    ):
+        command = sub.add_parser(name, help=help_text)
+        if name == "search":
+            command.add_argument("query")
+        command.add_argument("--corpus", action="append")
+        command.add_argument("--category", action="append")
+        command.add_argument("--limit", type=bounded_limit, default=10)
+        command.add_argument("--json", action="store_true")
+        if name == "list":
+            command.add_argument("--after")
+        command.set_defaults(handler=handler)
+
+    show = sub.add_parser("show", help="show one full entry")
+    show.add_argument("id")
+    show.add_argument("--json", action="store_true")
+    show.set_defaults(handler=cmd_show)
+
+    validate = sub.add_parser("validate", help="validate registry and entries")
+    validate.set_defaults(handler=cmd_validate)
+
+    preview = sub.add_parser("preview", help="preview and count ledger selections")
+    preview.add_argument("--select", action="append", required=True, help="CORPUS or CORPUS:CATEGORY[+CATEGORY]")
+    preview.add_argument("--limit", type=bounded_limit, default=10)
+    preview.add_argument("--json", action="store_true")
+    preview.set_defaults(handler=cmd_preview)
+
+    ledger = sub.add_parser("ledger", help="manage a case coverage ledger")
+    ledger_sub = ledger.add_subparsers(dest="ledger_command", required=True)
+
+    init = ledger_sub.add_parser("init", help="initialize a case ledger")
+    init.add_argument("case")
+    init.add_argument("--select", action="append", required=True, help="CORPUS or CORPUS:CATEGORY[+CATEGORY]")
+    init.set_defaults(handler=cmd_ledger_init)
+
+    next_command = ledger_sub.add_parser("next", help="show the next unchecked batch")
+    next_command.add_argument("case")
+    next_command.add_argument("--limit", type=bounded_limit, default=8)
+    next_command.add_argument("--json", action="store_true")
+    next_command.set_defaults(handler=cmd_ledger_next)
+
+    set_command = ledger_sub.add_parser("set", help="record one check result")
+    set_command.add_argument("case")
+    set_command.add_argument("id")
+    set_command.add_argument("--status", choices=sorted(ALL_STATUSES), required=True)
+    set_command.add_argument("--evidence", default="")
+    set_command.set_defaults(handler=cmd_ledger_set)
+
+    status = ledger_sub.add_parser("status", help="summarize ledger progress")
+    status.add_argument("case")
+    status.add_argument("--json", action="store_true")
+    status.set_defaults(handler=cmd_ledger_status)
+
+    verify = ledger_sub.add_parser("verify", help="verify exhaustive terminal coverage")
+    verify.add_argument("case")
+    verify.set_defaults(handler=cmd_ledger_verify)
+    return top
+
+
+def main() -> int:
+    args = parser().parse_args()
+    root = args.root.resolve()
+    try:
+        records = registry(root)
+        args.handler(args, root, records)
+    except (CorpusError, OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

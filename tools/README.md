@@ -1,10 +1,33 @@
 # Local MCP servers
 
-`tool-doctor.sh` is the one deliberately stateless helper in this directory. It
-reports which documented CLI capabilities are available without installing anything:
+This directory has three deliberately stateless helpers. `tool-doctor.sh` reports which
+documented CLI capabilities are available without installing anything:
 
 ```bash
 ./tools/tool-doctor.sh
+```
+
+`corpus-lookup` performs bounded, paginated queries over registered weakness corpora
+and maintains version- and content-pinned case coverage ledgers:
+
+```bash
+./tools/corpus-lookup corpora
+./tools/corpus-lookup search "GCM nonce reuse" --limit 10
+```
+
+`evidence` manages a case's `EVIDENCE.jsonl` — the layer of atomic, located,
+reproducible observations (`O-NNN`) that findings cite. It allocates IDs, records
+supersession and contradictions, and validates the file; it never executes an
+observation's `reproduce` command (verification is a human act). The case is identified
+by its `SCOPE.md`, as with `corpus-lookup`:
+
+```bash
+./tools/evidence add cases/acme-firmware \
+  --artifact artifacts/fw.bin --location "file offset 0x4A2C10" \
+  --observed "Bytes match the AES forward S-box." \
+  --reproduce "xxd -s 0x4A2C10 -l 256 artifacts/fw.bin"
+./tools/evidence list cases/acme-firmware
+./tools/evidence validate cases/acme-firmware
 ```
 
 Everything else in this directory should follow the stateful-server rule below.

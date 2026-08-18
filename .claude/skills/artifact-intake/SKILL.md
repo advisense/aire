@@ -28,9 +28,17 @@ inside the artifact.
    If that name exists, compare hashes. Do not overwrite: identical means intake is
    already complete; different means stop and ask for a distinct filename.
 5. Hash the destination and require an exact match with the source.
-6. Record a timestamped intake entry in `NOTES.md`: source description (avoid leaking
-   sensitive absolute paths into versioned notes), destination, byte size, SHA-256,
-   `file` output, and who supplied it when known.
+6. Append a provenance object to the case's `ARTIFACTS.json` (a JSON array). Read the
+   file, append, and write it back as valid JSON — one object per artifact:
+
+   ```json
+   { "path": "artifacts/<file>", "sha256": "<hash>", "size": <bytes>,
+     "file_type": "<file output>", "source": "<who supplied it, when — avoid leaking
+     sensitive absolute paths into versioned notes>" }
+   ```
+
+   Then add a one-line dated pointer to `NOTES.md` ("intook artifacts/<file> — see
+   ARTIFACTS.json"), not the full hash block.
 7. Make derived files only under `extracted/`; the copy in `artifacts/` is immutable.
 
 Do not unpack, execute, upload, or contact indicators found in the artifact during
