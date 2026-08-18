@@ -27,7 +27,7 @@ Each nonblank line of an entries file is one JSON object:
   "tags": ["aes-gcm", "forgery"],
   "applicable_when": ["The target encrypts two or more messages with one GCM key."],
   "check": ["Trace nonce generation and persistence across restart and concurrency."],
-  "evidence": ["Repeated key/nonce pairs or a code path that can generate them."],
+  "indicators": ["Repeated key/nonce pairs or a code path that can generate them."],
   "impact": "Plaintext relationships leak and authentication forgery may become possible.",
   "remediation": "Guarantee nonce uniqueness for each key.",
   "false_positives": ["The apparent reuse occurs under different keys."],
@@ -36,5 +36,7 @@ Each nonblank line of an entries file is one JSON object:
 ```
 
 Required fields are `id`, `title`, `summary`, `categories`, `applicable_when`, `check`,
-`evidence`, `impact`, `remediation`, and `references`. IDs use uppercase letters,
+`indicators`, `impact`, `remediation`, and `references`. `indicators` lists what to look
+for that would demonstrate the weakness (distinct from a case's `EVIDENCE.jsonl`
+observations and from the coverage ledger's per-check `evidence` justification). IDs use uppercase letters,
 digits, and hyphens and are unique within a corpus. Entries are sorted by ID.

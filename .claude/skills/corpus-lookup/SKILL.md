@@ -91,5 +91,12 @@ excluded corpora and reasons, and whether `ledger verify` passed. Candidate weak
 remain ledger entries; the main session drafts findings and sends them through the
 required `findings-reviewer` workflow.
 
+When called as part of `automatic-analysis`, never pause to ask the user how to select
+or disposition an entry. Include a plausibly applicable slice when evidence is
+ambiguous, process every batch, and use `unknown` with an exact required test and
+blocker when the available case evidence cannot decide an entry. Return those tests to
+the main session so it can run every safe and authorized one, then revisit the entry.
+Do not relax scope, isolation, evidence, or snapshot-drift requirements.
+
 “Complete” means `ledger verify` passed for the named snapshots and selections. It
 never means all possible weaknesses for all time.

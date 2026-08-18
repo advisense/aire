@@ -6,13 +6,23 @@ Why the harness is shaped this way, so the reasoning survives the people who mad
 
 Claude Code already provides the agent loop, permission enforcement, context
 management, and extension points. Building a wrapper around the Agent SDK would mean
-reimplementing those to gain programmatic control this project does not need, because
-the primary mode is interactive: an analyst driving a target, iterating, following
-hunches.
+reimplementing those to gain programmatic control this project does not need. The
+default mode is interactive: an analyst drives a target, iterates, and follows
+hunches. The opt-in `automatic-analysis` skill uses the same agent loop to exhaust a
+case's applicable corpus checks without conversational pauses.
 
-The SDK becomes worth it if the mode changes — batch-triaging a corpus in CI, running
-this as a service, or orchestrating flows the interactive loop will not express. Until
+The SDK becomes worth it for non-conversational execution — batch triage in CI,
+running this as a service, or orchestration the agent loop will not express. Until
 then, every capability is a skill, a subagent, an MCP server, or a case directory.
+
+## Interactive and automatic analysis
+
+Interactive analysis may stop for choices, missing facts, or permission. Automatic
+analysis instead makes conservative choices, runs every feasible test indicated by
+the selected corpora, and records unresolved checks with exact blockers. It never
+converts silence into authorization: `SCOPE.md`, host isolation, permission rules, and
+the findings-review gate remain unchanged. This keeps unattended coverage
+reproducible while making an incomplete run visibly incomplete.
 
 ## Three buckets, kept strictly separate
 
@@ -74,8 +84,19 @@ the artifact, everything derived from it, the findings, and the working log. Con
 compaction, session restarts, and subagent handoffs all become survivable because the
 state lives on disk rather than in the conversation.
 
-It also makes handoffs between main thread and subagents clean: both read and write
-the same directory instead of passing large blobs through the delegation boundary.
+That memory is layered by how much it can be trusted, so a mis-recorded detail cannot
+silently harden into an unquestioned fact. `ARTIFACTS.json` fixes identity and
+provenance. `EVIDENCE.jsonl` holds atomic, located, reproducible **observations**
+(`O-NNN`, managed by `tools/evidence`) — what was *seen*, never what it means, and
+superseded rather than edited so corrections keep their history. `HYPOTHESES.md` holds
+the **interpretations** of those observations together with the tests that would
+falsify them. `FINDINGS.md` holds only reviewed conclusions, each citing the
+observations behind it. `NOTES.md` is narrative and never authoritative: the main thread
+trusts `EVIDENCE.jsonl` over it and re-runs any observation before building a finding on
+it.
+
+This layering also makes handoffs between main thread and subagents clean: both read and
+write the same directory instead of passing large blobs through the delegation boundary.
 
 ## Corpora are queried, not loaded
 

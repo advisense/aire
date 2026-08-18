@@ -19,7 +19,7 @@ def entry(entry_id: str, title: str, category: str, summary: str) -> dict:
         "tags": ["test"],
         "applicable_when": ["The construction is present."],
         "check": ["Inspect its use."],
-        "evidence": ["A target-specific code or trace location."],
+        "indicators": ["A target-specific code or trace location."],
         "impact": "Security properties may fail.",
         "remediation": "Use the construction safely.",
         "false_positives": ["The prerequisite is absent."],
@@ -95,7 +95,7 @@ class CorpusLookupTests(unittest.TestCase):
 
         shown = self.run_tool("show", "crypto-core:KEY-001")
         self.assertIn("# crypto-core:KEY-001", shown.stdout)
-        self.assertIn("## Required evidence", shown.stdout)
+        self.assertIn("## Indicators", shown.stdout)
 
     def test_category_selection_and_complete_ledger(self) -> None:
         preview = self.run_tool(

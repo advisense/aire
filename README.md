@@ -24,11 +24,16 @@ CLAUDE.md               House rules: authorization, case workflow, delegation po
     tls-certificate-analysis/  X.509, key container, and handshake inspection
     tool-selection/     Portable selection of installed local tools
     corpus-lookup/      Isolated corpus queries and exhaustive case coverage workflow
+    automatic-analysis/  Unattended, no-questions corpus-backed case review
     new-case/           /new-case — scaffolds a case directory
   agents/               Delegated context — read-heavy triage workers
       findings-reviewer.md  Independent challenge of case findings and confidence ratings
 cases/                  One directory per target. Gitignored except TEMPLATE/
+                        Layered memory: ARTIFACTS.json → EVIDENCE.jsonl (O-NNN) →
+                        HYPOTHESES.md → FINDINGS.md; EVIDENCE trusted over NOTES.md
 tools/                  Stateless helpers and local MCP servers (see tools/README.md)
+    corpus-lookup       Corpus queries + case coverage ledger
+    evidence            Manage a case's EVIDENCE.jsonl observations
 docs/architecture.md    Why the harness is shaped this way
 ```
 
@@ -58,6 +63,17 @@ List the installed weakness corpora without loading their contents into context:
 ```bash
 ./tools/corpus-lookup corpora
 ```
+
+To run an existing, scoped case through every applicable corpus check without
+interactive questions:
+
+```text
+/automatic-analysis cases/acme-firmware
+```
+
+Automatic mode runs all feasible local and explicitly authorized tests. Missing scope,
+credentials, isolation, or tooling is recorded as an unresolved blocker; it is never
+treated as permission to widen the assessment.
 
 The starter configuration works with the stock macOS command-line tools and uses
 installed Wireshark, OpenSSL, mitmproxy, and Docker capabilities when present.

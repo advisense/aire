@@ -25,7 +25,7 @@ REQUIRED_ENTRY_FIELDS = {
     "categories": list,
     "applicable_when": list,
     "check": list,
-    "evidence": list,
+    "indicators": list,
     "impact": str,
     "remediation": str,
     "references": list,
@@ -142,7 +142,7 @@ def validate_entry(corpus: str, entry: Any, path: Path, line_number: int) -> Non
             raise CorpusError(f"{prefix}: invalid or empty {field}")
     if not re.fullmatch(r"[A-Z0-9][A-Z0-9-]*", entry["id"]):
         raise CorpusError(f"{prefix}: invalid id {entry['id']!r}")
-    for field in ("categories", "applicable_when", "check", "evidence"):
+    for field in ("categories", "applicable_when", "check", "indicators"):
         if not all(isinstance(value, str) and value for value in entry[field]):
             raise CorpusError(f"{prefix}: {field} must contain nonempty strings")
     if not all(re.fullmatch(r"[a-z0-9][a-z0-9-]*", value) for value in entry["categories"]):
@@ -223,7 +223,7 @@ def render_entry(item: dict[str, Any]) -> None:
     for heading, field in (
         ("Applicable when", "applicable_when"),
         ("Checks", "check"),
-        ("Required evidence", "evidence"),
+        ("Indicators", "indicators"),
     ):
         print(f"\n## {heading}\n")
         for value in item[field]:

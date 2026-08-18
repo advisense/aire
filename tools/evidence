@@ -1,0 +1,285 @@
+#!/usr/bin/env python3
+"""Maintain a case's EVIDENCE.jsonl — atomic, located, reproducible observations.
+
+Observations are the bottom layer of case memory: what was *seen*, not what it means.
+Each is one JSON object per line. Entries are never edited in place; a correction adds a
+new observation that supersedes the old one, leaving the original on record. Findings in
+FINDINGS.md cite these observation IDs.
+
+This tool deliberately never executes an observation's `reproduce` command. Verification
+is a human/reviewer act: run the command yourself, then record the outcome with `verify`.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import sys
+from datetime import date, datetime
+from pathlib import Path
+from typing import Any
+
+EVIDENCE_NAME = "EVIDENCE.jsonl"
+ID_PATTERN = re.compile(r"O-(\d+)")
+REQUIRED_STRING_FIELDS = ("artifact", "location", "observed", "reproduce")
+LINK_FIELDS = ("supersedes", "superseded_by", "contradicts")
+
+
+class EvidenceError(Exception):
+    pass
+
+
+def today() -> str:
+    return date.today().isoformat()
+
+
+def valid_date(value: str) -> str:
+    try:
+        datetime.strptime(value, "%Y-%m-%d")
+    except ValueError as exc:
+        raise EvidenceError(f"invalid date (want YYYY-MM-DD): {value!r}") from exc
+    return value
+
+
+def evidence_path(case: str) -> Path:
+    case_path = Path(case).resolve()
+    if not (case_path / "SCOPE.md").is_file():
+        raise EvidenceError(f"not a case directory (missing SCOPE.md): {case_path}")
+    return case_path / EVIDENCE_NAME
+
+
+def load(case: str) -> tuple[Path, list[dict[str, Any]]]:
+    path = evidence_path(case)
+    entries: list[dict[str, Any]] = []
+    if path.is_file():
+        for number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if not raw.strip():
+                continue
+            try:
+                entry = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                raise EvidenceError(f"{path}:{number}: invalid JSON: {exc}") from exc
+            if not isinstance(entry, dict):
+                raise EvidenceError(f"{path}:{number}: line is not a JSON object")
+            entries.append(entry)
+    return path, entries
+
+
+def dump(path: Path, entries: list[dict[str, Any]]) -> None:
+    body = "".join(json.dumps(entry, sort_keys=True) + "\n" for entry in entries)
+    temporary = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+    try:
+        temporary.write_text(body, encoding="utf-8")
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def index_of(entries: list[dict[str, Any]], observation_id: str) -> int:
+    for position, entry in enumerate(entries):
+        if entry.get("id") == observation_id:
+            return position
+    raise EvidenceError(f"no such observation: {observation_id}")
+
+
+def next_id(entries: list[dict[str, Any]]) -> str:
+    highest = 0
+    for entry in entries:
+        match = ID_PATTERN.fullmatch(str(entry.get("id", "")))
+        if match:
+            highest = max(highest, int(match.group(1)))
+    return f"O-{highest + 1:03d}"
+
+
+def new_observation(observation_id: str, args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "id": observation_id,
+        "artifact": args.artifact,
+        "location": args.location,
+        "observed": args.observed,
+        "reproduce": args.reproduce,
+        "caveats": args.caveats or "",
+        "verified": args.verified,
+        "supersedes": None,
+        "superseded_by": None,
+        "contradicts": None,
+        "resolution": None,
+    }
+
+
+def resolved_verified(args: argparse.Namespace) -> str | bool:
+    # argparse stores False when --verified is absent, "" when bare, a date otherwise.
+    if args.verified is False:
+        return False
+    if args.verified == "":
+        return today()
+    return valid_date(args.verified)
+
+
+def compact_line(entry: dict[str, Any]) -> str:
+    flag = "✓" if entry.get("verified") else " "
+    if entry.get("superseded_by"):
+        flag = "×"
+    observed = str(entry.get("observed", ""))
+    if len(observed) > 60:
+        observed = observed[:57] + "..."
+    return f"{entry['id']} [{flag}] {entry.get('artifact', '')} @ {entry.get('location', '')} — {observed}"
+
+
+def cmd_add(args: argparse.Namespace) -> None:
+    path, entries = load(args.case)
+    args.verified = resolved_verified(args)
+    observation_id = next_id(entries)
+    entries.append(new_observation(observation_id, args))
+    dump(path, entries)
+    print(observation_id)
+
+
+def cmd_supersede(args: argparse.Namespace) -> None:
+    path, entries = load(args.case)
+    old = entries[index_of(entries, args.observation)]
+    if old.get("superseded_by"):
+        raise EvidenceError(
+            f"{args.observation} is already superseded by {old['superseded_by']}"
+        )
+    args.verified = resolved_verified(args)
+    observation_id = next_id(entries)
+    entry = new_observation(observation_id, args)
+    entry["supersedes"] = args.observation
+    old["superseded_by"] = observation_id
+    entries.append(entry)
+    dump(path, entries)
+    print(observation_id)
+
+
+def cmd_contradict(args: argparse.Namespace) -> None:
+    path, entries = load(args.case)
+    entry = entries[index_of(entries, args.observation)]
+    index_of(entries, args.by)  # ensure the referenced observation exists
+    if not args.resolution.strip():
+        raise EvidenceError("--resolution must not be empty")
+    entry["contradicts"] = args.by
+    entry["resolution"] = args.resolution.strip()
+    dump(path, entries)
+    print(f"{args.observation} contradicts {args.by}")
+
+
+def cmd_verify(args: argparse.Namespace) -> None:
+    path, entries = load(args.case)
+    entry = entries[index_of(entries, args.observation)]
+    entry["verified"] = valid_date(args.date) if args.date else today()
+    dump(path, entries)
+    print(f"{args.observation} verified {entry['verified']}")
+
+
+def cmd_list(args: argparse.Namespace) -> None:
+    _, entries = load(args.case)
+    shown = 0
+    for entry in entries:
+        if args.unverified and (entry.get("verified") or entry.get("superseded_by")):
+            continue
+        print(compact_line(entry))
+        shown += 1
+    if not shown:
+        print("(no observations)")
+
+
+def cmd_validate(args: argparse.Namespace) -> None:
+    path, entries = load(args.case)
+    seen: set[str] = set()
+    ids = {str(entry.get("id")) for entry in entries}
+    for number, entry in enumerate(entries, 1):
+        prefix = f"{path} entry {number}"
+        observation_id = str(entry.get("id", ""))
+        if not ID_PATTERN.fullmatch(observation_id):
+            raise EvidenceError(f"{prefix}: invalid id {observation_id!r}")
+        if observation_id in seen:
+            raise EvidenceError(f"{prefix}: duplicate id {observation_id}")
+        seen.add(observation_id)
+        for field in REQUIRED_STRING_FIELDS:
+            if not isinstance(entry.get(field), str) or not entry[field].strip():
+                raise EvidenceError(f"{prefix}: missing or empty {field}")
+        verified = entry.get("verified", False)
+        if verified is not False:
+            if not isinstance(verified, str):
+                raise EvidenceError(f"{prefix}: verified must be false or a date")
+            valid_date(verified)
+        for field in LINK_FIELDS:
+            target = entry.get(field)
+            if target is not None and target not in ids:
+                raise EvidenceError(f"{prefix}: {field} points at unknown {target!r}")
+        if entry.get("contradicts") and not str(entry.get("resolution") or "").strip():
+            raise EvidenceError(f"{prefix}: contradicts requires a resolution")
+    print(f"OK: {len(entries)} observations")
+
+
+def add_observation_arguments(command: argparse.ArgumentParser, required: bool) -> None:
+    command.add_argument("--artifact", required=required)
+    command.add_argument("--location", required=required)
+    command.add_argument("--observed", required=required)
+    command.add_argument("--reproduce", required=required)
+    command.add_argument("--caveats", default="")
+    command.add_argument(
+        "--verified",
+        nargs="?",
+        const="",
+        default=False,
+        metavar="YYYY-MM-DD",
+        help="mark verified now, or on the given date",
+    )
+
+
+def parser() -> argparse.ArgumentParser:
+    top = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    sub = top.add_subparsers(dest="command", required=True)
+
+    add = sub.add_parser("add", help="record a new observation")
+    add.add_argument("case")
+    add_observation_arguments(add, required=True)
+    add.set_defaults(handler=cmd_add)
+
+    supersede = sub.add_parser("supersede", help="replace an observation with a corrected one")
+    supersede.add_argument("case")
+    supersede.add_argument("observation", help="the O-ID being superseded")
+    add_observation_arguments(supersede, required=True)
+    supersede.set_defaults(handler=cmd_supersede)
+
+    contradict = sub.add_parser("contradict", help="record that one observation contradicts another")
+    contradict.add_argument("case")
+    contradict.add_argument("observation", help="the O-ID that contradicts another")
+    contradict.add_argument("--by", required=True, help="the O-ID being contradicted")
+    contradict.add_argument("--resolution", required=True, help="how the contradiction was resolved")
+    contradict.set_defaults(handler=cmd_contradict)
+
+    verify = sub.add_parser("verify", help="mark an observation independently verified")
+    verify.add_argument("case")
+    verify.add_argument("observation")
+    verify.add_argument("--date", default="", metavar="YYYY-MM-DD")
+    verify.set_defaults(handler=cmd_verify)
+
+    listing = sub.add_parser("list", help="list observations")
+    listing.add_argument("case")
+    listing.add_argument("--unverified", action="store_true", help="only unverified, non-superseded")
+    listing.set_defaults(handler=cmd_list)
+
+    validate = sub.add_parser("validate", help="schema-check EVIDENCE.jsonl")
+    validate.add_argument("case")
+    validate.set_defaults(handler=cmd_validate)
+    return top
+
+
+def main() -> int:
+    args = parser().parse_args()
+    try:
+        args.handler(args)
+    except (EvidenceError, OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
