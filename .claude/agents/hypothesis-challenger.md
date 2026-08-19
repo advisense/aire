@@ -4,7 +4,7 @@ description: Independently generate and challenge alternative explanations for u
 tools: Read, Grep, Glob
 skills:
   - case-workflow
-model: fable
+model: opus
 color: blue
 ---
 

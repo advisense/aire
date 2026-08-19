@@ -28,7 +28,7 @@ CLAUDE.md               House rules: authorization, case workflow, delegation po
     new-case/           /new-case — scaffolds a case directory
   agents/               Delegated context — read-heavy triage workers
       findings-reviewer.md  Independent challenge of case findings and confidence ratings
-     hypothesis-challenger.md  Bounded alternative-hypothesis synthesis using Fable
+      hypothesis-challenger.md  Bounded alternative-hypothesis synthesis
 cases/                  One directory per target. Gitignored except TEMPLATE/
                         Layered memory: ARTIFACTS.json → EVIDENCE.jsonl (O-NNN) →
                         HYPOTHESES.md → FINDINGS.md; EVIDENCE trusted over NOTES.md
@@ -74,7 +74,7 @@ interactive questions:
 
 Automatic mode runs all feasible local and explicitly authorized tests. Missing scope,
 credentials, isolation, or tooling is recorded as an unresolved blocker; it is never
-treated as permission to widen the assessment. A read-only Fable challenger is invoked
+treated as permission to widen the assessment. A read-only reasoning challenger runs
 when unexplained behavior materially steers the analysis and once before reporting. Its
 suggestions remain subject to the same scope and evidence rules, and residual behavior
 is reported separately from corpus-ledger completeness.
