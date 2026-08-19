@@ -88,6 +88,8 @@ exception. See `.claude/agents/` for the roster.
 
 - Be terse. Keep updates and final responses brief, reporting only decisions, essential
   evidence, blockers, and next actions. Do not narrate routine tool use.
+- State assumptions explicitly, distinguish them from verified observations, and note
+  which conclusions or actions depend on them.
 - State hypotheses explicitly and say what evidence would falsify them. "Probably AES"
   is not a finding; "AES-128 in CBC mode, evidenced by the T-table constants at
   0x4A2C10 and the 16-byte IV prefix on each record" is.

@@ -12,10 +12,9 @@ disposition or further progress is blocked by a boundary below.
 
 Automatic mode changes interaction policy, not authorization or safety policy. It
 does not authorize a live target, widen `SCOPE.md`, disclose secrets, install tools,
-execute untrusted artifacts on the host, or bypass a permission prompt. Do not start an
-operation that would require interactive approval unless the project's configured
-scope hook can approve it non-interactively. Never invent missing scope, credentials,
-facts, or evidence.
+execute untrusted artifacts on the host, or bypass permission controls. Treat any
+operation that requires interactive approval as blocked. Never invent missing scope,
+credentials, facts, or evidence.
 
 ## Boundaries
 

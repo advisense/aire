@@ -120,27 +120,17 @@ with Claude Code running against a workspace mounted inside it.
 
 Egress scoping is the mechanism that keeps "analyze this web app" from becoming
 "contact arbitrary hosts". The `SCOPE.md` gate in every case is the procedural layer
-above it; `.claude/settings.json` deny and ask rules are the layer below. All three
-exist because each fails differently: a procedural gate fails to inattention, a
-permission rule fails to a subprocess that bypasses the built-in tools, and network
-egress control catches what both miss.
+above it; `.claude/settings.json` deny rules are the layer below. Network egress
+control catches subprocess traffic that bypasses the built-in tools.
 
 ## Permission posture
 
-`.claude/settings.json` is deny-first and deliberately conservative about anything that
-generates traffic. Read-only local analysis commands are allowlisted, since prompting
-on `file` and `strings` trains the analyst to approve reflexively — which is the real
-risk that a permission policy is trying to avoid.
+`.claude/settings.json` denies access to sensitive local data and pushing Git changes.
+Analysis commands, including commands that generate traffic, are allowlisted; the
+mandatory `SCOPE.md` check remains the authorization gate for live targets.
 
-Personal widening belongs in `.claude/settings.local.json` (gitignored), never in the
+Personal changes belong in `.claude/settings.local.json` (gitignored), never in the
 shared file.
-
-The `PermissionRequest` hook in `.claude/settings.json` auto-approves conservative,
-direct `curl` invocations only when every requested URL falls under an exact
-backtick-quoted HTTP(S) URL in the **In scope** section of an `ACTIVE` case. The hook
-requires the same scheme, host, and effective port, and honors path restrictions.
-Commands using redirects, proxies, curl config files, shell composition or expansion,
-or unrecognized options keep the normal permission prompt.
 
 ## Deliberate omissions
 
