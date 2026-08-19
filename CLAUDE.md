@@ -80,6 +80,13 @@ running instrumentation session, a live browser, an interactive proxy. Subagents
 share live state with the main session, and trying to delegate that work will fail
 in confusing ways.
 
+Use `hypothesis-challenger` as a read-only, fresh-context reasoning pass when verified
+observations conflict, unexplained behavior is steering expensive analysis, or an
+automatic run is ready to report. It proposes competing explanations and
+discriminating tests; the main thread retains authority over scope and safety checks,
+test execution, case-file mutation, evidence recording, and hypothesis status. Its
+bounded challenge complements rather than replaces `findings-reviewer`.
+
 Subagents normally write to the case directory and return a path plus a short summary,
 rather than returning bulk findings inline. The findings reviewer is the read-only
 exception. See `.claude/agents/` for the roster.
@@ -88,6 +95,8 @@ exception. See `.claude/agents/` for the roster.
 
 - Be terse. Keep updates and final responses brief, reporting only decisions, essential
   evidence, blockers, and next actions. Do not narrate routine tool use.
+- For complex, multi-step work, create and maintain a todo list. Mark tasks complete as
+  they are verified, add newly discovered work, and make blockers explicit.
 - State assumptions explicitly, distinguish them from verified observations, and note
   which conclusions or actions depend on them.
 - State hypotheses explicitly and say what evidence would falsify them. "Probably AES"

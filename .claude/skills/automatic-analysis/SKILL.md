@@ -58,16 +58,59 @@ drift, or evidence-integrity failure. Report the condition without asking a ques
    unavailable.
 6. For each `confirmed` or `probable` weakness, draft a finding in `DRAFT-FINDINGS.md`
    citing the backing `O-NNN` observations, invoke `findings-reviewer`, reconcile its
-   verdict, and promote only accepted findings to `FINDINGS.md`. Automatic mode permits this reconciliation
-   without user input; the independent review gate still applies.
-7. Run `ledger verify`. A successful run ends with zero `unchecked` and zero `unknown`
+   verdict, and promote only accepted findings to `FINDINGS.md`. Automatic mode permits
+   this reconciliation without user input; the independent review gate still applies.
+7. Invoke `hypothesis-challenger` once after ledger work and finding reconciliation,
+   before the final report. Give it the case path and ask for a residual-uncertainty
+   review. If it identifies one safe, authorized, proportionate test with material
+   information gain, run that test and update the evidence, hypotheses, ledger, and
+   affected findings through their normal review gates. Do not recursively invoke the
+   challenger when that cycle produces no materially new verified evidence.
+8. Run `ledger verify`. A successful run ends with zero `unchecked` and zero `unknown`
    entries. A bounded run may end with `unknown` entries only after all safe,
    authorized alternatives have been exhausted; in that case verification is expected
    to fail and the run must not be called complete.
+
+## Bounded hypothesis challenge
+
+Use `hypothesis-challenger` during the autonomous loop before broadening or escalating
+testing only when an unexplained anomaly is materially steering the analysis and at
+least one of these triggers holds:
+
+- verified observations conflict with the current working model;
+- the unexplained behavior changes corpus applicability, the threat model, a likely
+  finding, or which test branch should run next;
+- two focused tests have failed to discriminate the same alternatives; or
+- the next step would repeat or substantially escalate a dead end recorded in
+  `NOTES.md`.
+
+Do not invoke it for an ordinary corpus `unknown` with a clear scope, tooling, data, or
+isolation blocker; a single negative test; a low-impact curiosity that cannot affect
+coverage or findings; or an anomaly already challenged without materially new verified
+evidence.
+
+Identify an invocation by its anomaly cluster and evidence state. Invoke at most once
+for that pair, and re-invoke only after a new verified observation, an observation
+supersession or contradiction, or a material hypothesis-status change. The default
+budget is two mid-run invocations plus the mandatory pre-report invocation per
+automatic run. When the budget is exhausted, preserve the behavior as an open
+hypothesis or residual uncertainty rather than expanding the analysis indefinitely.
+
+The challenger is advisory and read-only. The main analyst must assess its suggestions
+against `SCOPE.md`, safety, expected information gain, and cost; choose at most the
+smallest feasible high-value test; record resulting facts through `./tools/evidence`;
+update `HYPOTHESES.md`; and revisit affected ledger entries. Record the invocation
+reason, evidence state, accepted or rejected suggestion, and stop condition in
+`NOTES.md`. Unsafe, unauthorized, duplicative, or disproportionate suggestions are
+blockers or dead ends, not tests.
 
 ## Final report
 
 Return a compact report containing the selected corpora and pinned versions, status
 counts, findings added or rejected, tests performed, excluded corpora with reasons,
 unresolved items with their exact blockers and required tests, and the result of
-`ledger verify`. Do not end with questions or requests for confirmation.
+`ledger verify`. Also state whether `hypothesis-challenger` ran, which anomaly clusters
+it challenged, which suggestions were accepted or rejected, and any residual
+unexplained behavior or open hypotheses. Corpus verification does not mean the target
+is fully explained; report those states separately. Do not end with questions or
+requests for confirmation.

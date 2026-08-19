@@ -33,4 +33,8 @@ case until corpus selections have been made.
 Once `SCOPE.md` is complete, `/automatic-analysis cases/<case-name>` performs an
 unattended corpus-backed review. It asks no questions: tests outside the recorded
 scope or unavailable in the current environment are preserved as `unknown` with an
-exact blocker instead of being silently skipped.
+exact blocker instead of being silently skipped. Automatic mode also uses a bounded,
+read-only hypothesis challenger when unexplained behavior materially controls the next
+analysis branch and once before reporting. A verified coverage ledger may therefore
+coexist with open hypotheses or residual unexplained behavior; the final report states
+both separately.

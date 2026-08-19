@@ -65,14 +65,24 @@ Independent review also depends on context isolation. A findings reviewer starts
 the case evidence without inheriting the analyst's conversation, so it can re-derive
 claims instead of absorbing the framing that produced them.
 
+The hypothesis challenger uses the same isolation for a different purpose. It runs
+before closure to generate competing explanations for unresolved behavior and propose
+the smallest discriminating test. Automatic analysis invokes it when contradictory or
+non-discriminating evidence materially controls the next branch, and once before final
+reporting. It is not periodic: challenges are deduplicated by anomaly and evidence
+state, and capped so speculative synthesis cannot become its own rabbit hole. The
+findings reviewer remains the later gate that validates drafted conclusions,
+confidence, and omissions.
+
 **The constraint that shapes the roster:** subagents cannot share live state. None of
 them can reach into the main session's attached debugger or running instrumentation.
 So the division is:
 
 - **Delegate** read-heavy, self-contained work: triage, identification, corpus sweeps,
-  bundle searching.
+  bundle searching, and read-only hypothesis challenges.
 - **Keep on the main thread** anything holding a live session: debugger,
-  instrumentation, interactive proxy, browser.
+  instrumentation, interactive proxy, browser. The main thread also owns authorization,
+  test execution, evidence recording, and all durable case changes.
 
 Agents write bulk output to the case directory and return a path plus a summary, which
 keeps the handoff cheap in both directions.
