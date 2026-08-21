@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Maintain a case's EVIDENCE.jsonl — atomic, located, reproducible observations.
+"""Maintain a case's EVIDENCE.jsonl: atomic, located, reproducible observations.
 
 Observations are the bottom layer of case memory: what was *seen*, not what it means.
 Each is one JSON object per line. Entries are never edited in place; a correction adds a
@@ -126,7 +126,7 @@ def compact_line(entry: dict[str, Any]) -> str:
     observed = str(entry.get("observed", ""))
     if len(observed) > 60:
         observed = observed[:57] + "..."
-    return f"{entry['id']} [{flag}] {entry.get('artifact', '')} @ {entry.get('location', '')} — {observed}"
+    return f"{entry['id']} [{flag}] {entry.get('artifact', '')} @ {entry.get('location', '')}: {observed}"
 
 
 def cmd_add(args: argparse.Namespace) -> None:

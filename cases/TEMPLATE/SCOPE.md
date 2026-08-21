@@ -1,6 +1,6 @@
-# Scope — <CASE NAME>
+# Scope: <CASE NAME>
 
-**Status:** DRAFT — no live target may be contacted until this file is complete.
+**Status:** DRAFT. No live target may be contacted until this file is complete.
 **Date:** <YYYY-MM-DD>
 **Analyst:**
 
@@ -18,7 +18,7 @@ the work is not authorized.
 ## In scope
 
 Systems, hosts, domains, and artifacts that may be analyzed. Live hosts must be listed
-explicitly — a domain being related to the client is not the same as being in scope.
+explicitly. A domain being related to the client is not the same as being in scope.
 Write each live HTTP(S) boundary as an exact backtick-quoted URL, including its port
 and any path restriction (for example, `https://app.example.test:8443/api`). Active
 cases use these URLs to auto-approve simple in-scope `curl` commands.

@@ -37,7 +37,6 @@ first_available crypto optional openssl || true
 first_available packets optional tshark || true
 first_available pcap-info optional capinfos || true
 first_available proxy optional mitmproxy mitmdump || true
-first_available isolation optional docker podman || true
 first_available re-suite optional rizin r2 rabin2 || true
 first_available firmware optional binwalk || true
 first_available signatures optional yara || true

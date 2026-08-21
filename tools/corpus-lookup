@@ -218,7 +218,7 @@ def full_text(item: dict[str, Any]) -> str:
 
 
 def render_entry(item: dict[str, Any]) -> None:
-    print(f"# {item['full_id']} — {item['title']}\n")
+    print(f"# {item['full_id']}: {item['title']}\n")
     print(item["summary"])
     for heading, field in (
         ("Applicable when", "applicable_when"),
@@ -236,7 +236,7 @@ def render_entry(item: dict[str, Any]) -> None:
             print(f"- {value}")
     print("\n## References\n")
     for reference in item["references"]:
-        locator = f" — {reference['locator']}" if reference.get("locator") else ""
+        locator = f" ({reference['locator']})" if reference.get("locator") else ""
         print(f"- [{reference['title']}]({reference['url']}){locator}")
 
 

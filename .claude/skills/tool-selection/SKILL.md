@@ -10,14 +10,12 @@ modify the host, or download a tool without asking the user first.
 
 ## Discover capabilities
 
-Run the repository's read-only inventory:
-
 ```bash
 ./tools/tool-doctor.sh
 ```
 
-Treat its output as capabilities, not a shopping list. Missing optional tools do not
-block analysis when an installed fallback can answer the question.
+Read its output as capabilities, not a shopping list. Missing optional tools do not block
+analysis when an installed fallback answers the question.
 
 ## Portable command map
 
@@ -33,19 +31,18 @@ block analysis when an installed fallback can answer the question.
 | TLS/certificates | `openssl` | none; request installation if needed |
 | Packet captures | `tshark`, `capinfos` | none; request Wireshark CLI tools |
 
-First identify the file format with `file`; then choose format-specific commands. Do
-not run every variant and do not treat an unsupported-format error as evidence about
-the artifact.
+Identify the format with `file` first, then choose format-specific commands. Do not run
+every variant, and do not treat an unsupported-format error as evidence about the
+artifact.
 
 ## Optional specialist tools
 
 Rizin/radare2, binwalk, YARA, Frida, and Ghidra are enhancements, not baseline
-requirements. If one would materially shorten the work and no installed tool covers
-the need, explain the exact capability it adds and ask the user to install it. Do not
-quietly substitute a network service or upload an artifact.
+requirements. If one would materially shorten the work and no installed tool covers the
+need, name the exact capability it adds and ask the user to install it. Never quietly
+substitute a network service or upload an artifact.
 
 ## Live and executable tools
 
 `openssl s_client`, live `tshark` capture, mitmproxy, and browser automation generate
-traffic: read the case `SCOPE.md` first. Debuggers and instrumentation execute or
-attach to code: use only inside the isolation model in `docs/architecture.md`.
+traffic: read the case `SCOPE.md` first.

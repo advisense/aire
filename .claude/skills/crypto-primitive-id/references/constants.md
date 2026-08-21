@@ -1,7 +1,7 @@
 # Cryptographic constant reference
 
 Identification table for constants that appear in statically-linked or hand-rolled
-implementations. A match means the primitive is *present in the image*; confirm by
+implementations. A match means the primitive is *present in the image*. Confirm by
 cross-reference to a caller before recording it.
 
 Byte order matters: most of these appear little-endian on x86 and ARM. Search both.
@@ -17,8 +17,8 @@ Byte order matters: most of these appear little-endian on x86 and ARM. Search bo
 | SHA-3 / Keccak | 24-entry round constants beginning `0000000000000001 0000000000008082`; 1600-bit state |
 | BLAKE2 | Reuses SHA-512 IV; distinguished by 10-row sigma permutation table |
 
-Note: SHA-256's IV is the fractional part of the square roots of the first 8 primes,
-and SHA-512's the first 8 primes' cube roots — the same values appear in BLAKE2 and
+SHA-256's IV is the fractional part of the square roots of the first 8 primes, and
+SHA-512's the cube roots of the same primes. The values also appear in BLAKE2 and
 elsewhere, so an IV match alone does not pin the algorithm.
 
 ## Block ciphers
@@ -29,14 +29,14 @@ elsewhere, so an IV match alone does not pin the algorithm.
 | DES | PC1/PC2 permutation tables, 8 S-boxes of 64 entries each |
 | Blowfish | 4KB+ of pi-derived P-array and S-boxes beginning `243f6a88 85a308d3 13198a2e 03707344` |
 | Camellia | Sigma constants `a09e667f3bcc908b b67ae8584caa73b2` |
-| TEA/XTEA | Delta `9e3779b9` — the golden-ratio constant; also appears in unrelated hash mixers, so confirm by loop shape |
+| TEA/XTEA | Delta `9e3779b9`, the golden-ratio constant. It also appears in unrelated hash mixers, so confirm by loop shape |
 
 ## Stream ciphers and AEAD
 
 | Primitive | Signature |
 |---|---|
 | ChaCha20 / Salsa20 | Constant string `expand 32-byte k` (or `expand 16-byte k` for 128-bit keys) |
-| RC4 | No constants — identify by KSA shape: a 256-byte array initialized to the identity permutation, then swapped in a 256-iteration loop |
+| RC4 | No constants. Identify by KSA shape: a 256-byte array initialized to the identity permutation, then swapped in a 256-iteration loop |
 | Poly1305 | Clamping mask `0ffffffc0ffffffc0ffffffc0fffffff` applied to the key |
 | AES-GCM | AES core plus GF(2^128) multiplication; reduction polynomial `e1000000...` |
 
@@ -48,7 +48,7 @@ elsewhere, so an IV match alone does not pin the algorithm.
 | Ed25519 | Curve25519 field plus base point and the constant `d = 0x52036cee...` |
 | NIST P-256 | Prime `ffffffff00000001000000000000000000000000ffffffffffffffffffffffff` |
 | secp256k1 | Prime `fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f` |
-| RSA | No fixed constants — identify by modexp loop, Montgomery reduction, and small public exponents (`010001` = 65537) |
+| RSA | No fixed constants. Identify by modexp loop, Montgomery reduction, and small public exponents (`010001` = 65537) |
 
 ## Encodings and containers
 
@@ -56,7 +56,7 @@ Frequently mistaken for cryptography; rule these out early.
 
 | Marker | Meaning |
 |---|---|
-| `30 82` at offset 0 | DER SEQUENCE — cert, key, or signature |
+| `30 82` at offset 0 | DER SEQUENCE: cert, key, or signature |
 | `-----BEGIN` | PEM |
 | `1f 8b` | gzip (high entropy, not encrypted) |
 | `78 9c` / `78 01` / `78 da` | zlib |
@@ -64,5 +64,5 @@ Frequently mistaken for cryptography; rule these out early.
 | `fd 37 7a 58 5a` | XZ |
 | CRC32 table beginning `00000000 77073096 ee0e612c` | Checksum, not a hash |
 
-A CRC table in a "crypto" routine is a common false positive and an equally common
-real finding — integrity checks built on CRC provide no authentication.
+A CRC table in a "crypto" routine is a common false positive and an equally common real
+finding: integrity checks built on CRC provide no authentication.

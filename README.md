@@ -73,16 +73,58 @@ interactive questions:
 ```
 
 Automatic mode runs all feasible local and explicitly authorized tests. Missing scope,
-credentials, isolation, or tooling is recorded as an unresolved blocker; it is never
-treated as permission to widen the assessment. A read-only reasoning challenger runs
-when unexplained behavior materially steers the analysis and once before reporting. Its
-suggestions remain subject to the same scope and evidence rules, and residual behavior
-is reported separately from corpus-ledger completeness.
+credentials, or tooling is recorded as an unresolved blocker; it is never treated as
+permission to widen the assessment. A read-only reasoning challenger runs when
+unexplained behavior materially steers the analysis and once before reporting. Its
+suggestions remain subject to the same scope and evidence rules, and residual behavior is
+reported separately from corpus-ledger completeness.
 
 The starter configuration works with the stock macOS command-line tools and uses
-installed Wireshark, OpenSSL, mitmproxy, and Docker capabilities when present.
+installed Wireshark, OpenSSL, and mitmproxy capabilities when present.
 Specialist tools such as Rizin, binwalk, YARA, Frida, and Ghidra remain optional; the
 skills ask before recommending an installation.
+
+
+## Use Claude Code with a local LM Studio model
+
+LM Studio exposes an Anthropic-compatible `POST /v1/messages` endpoint that Claude
+Code can use. Load a model in LM Studio, then start its local server from the app or
+with the `lms` CLI (the default port is `1234`):
+
+```bash
+lms server start --port 1234
+```
+
+In the shell where you will run Claude Code, point the Anthropic client at LM Studio:
+
+```bash
+export ANTHROPIC_BASE_URL=http://localhost:1234
+export ANTHROPIC_AUTH_TOKEN=lmstudio
+export CLAUDE_CODE_ATTRIBUTION_HEADER=0
+```
+
+Start Claude Code with the identifier of the model loaded in LM Studio:
+
+```bash
+claude --model qwen/qwen3.8-27b --effort low
+```
+
+This example uses [Qwen3.8 27B](https://lmstudio.ai/models/qwen/qwen3.8-27b).
+Replace `qwen/qwen3.8-27b` with your loaded model's identifier. Models and server
+settings with more than approximately 25,000 tokens of context are recommended
+because Claude Code can consume substantial context.
+
+If **Require Authentication** is enabled in LM Studio, create an LM Studio API token
+and use it instead of the placeholder token:
+
+```bash
+export LM_API_TOKEN=<LMSTUDIO_TOKEN>
+export ANTHROPIC_AUTH_TOKEN="$LM_API_TOKEN"
+```
+
+See the [LM Studio Claude Code integration guide](https://lmstudio.ai/docs/integrations/claude-code)
+for current details and the [LM Studio authentication guide](https://lmstudio.ai/docs/developer/core/authentication)
+for token setup.
 
 ## Extending it
 
